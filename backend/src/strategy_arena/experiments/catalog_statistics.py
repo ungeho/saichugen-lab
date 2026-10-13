@@ -10,6 +10,8 @@ def algorithm_statistics(name: str, experiments) -> dict:
     groups = {}
     unclassified = 0
     for identifier, payload in experiments:
+        if payload.get("experiment_kind") == "rollout_quality_v1":
+            continue  # 設定比較は専用集計。通常図鑑の条件不足とは扱わない。
         try:
             rule = payload["rule_version"]
             condition = payload["information_condition"]

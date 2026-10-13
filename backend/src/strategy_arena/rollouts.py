@@ -17,7 +17,8 @@ def sampled_game(observation, rng):
         raise ValueError("復元した観測が一致しません")
     return game
 
-def rollout_trial(observation, cards, templates, seed, trial, check=lambda: None, policy_names=None):
+def rollout_trial(observation, cards, templates, seed, trial, check=lambda: None, policy_names=None,
+                  on_game=lambda stage: None):
     # 実行時importによりregistry/comparison/runnerとの初期化循環を避ける。
     from .comparison import clone_strategy
     from .experiments.runner import derived_seed
@@ -28,6 +29,7 @@ def rollout_trial(observation, cards, templates, seed, trial, check=lambda: None
     rng_states = [Random(derived_seed(seed, f"branch-policy:{trial}:{p}:{names[p]}:{versions[p]}")).getstate() for p in range(3)]
     for card in cards:
         check()
+        on_game("started")
         game = deepcopy(base)
         policies = [clone_strategy(s) for s in templates]
         rngs = [Random() for _ in range(3)]
@@ -49,6 +51,7 @@ def rollout_trial(observation, cards, templates, seed, trial, check=lambda: None
         worst = 3 - sum(s < score for s in scores)
         rank = str(best) if best == worst else f"{best}–{worst}"
         winners = game.winners
+        on_game("finished")
         won = observation.player in winners
         rows.append({"score": score, "win": int(won), "rank": rank,
                                 "sole_win": int(won and len(winners) == 1),

@@ -21,6 +21,13 @@ class ExperimentStore:
             row = connection.execute("SELECT payload FROM experiments WHERE id = ?", (identifier,)).fetchone()
         return json.loads(row[0]) if row else None
 
+    def update(self, identifier: str, payload: dict) -> None:
+        """新規ジョブ自身の保存レコードだけを更新する。旧実験は移行しない。"""
+        with sqlite3.connect(self.path) as connection:
+            changed = connection.execute("UPDATE experiments SET payload=? WHERE id=?", (json.dumps(payload), identifier))
+            if changed.rowcount != 1:
+                raise KeyError(identifier)
+
     def iter_experiments(self):
         with sqlite3.connect(self.path) as connection:
             for identifier, payload in connection.execute("SELECT id, payload FROM experiments ORDER BY rowid"):

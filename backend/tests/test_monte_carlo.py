@@ -62,7 +62,7 @@ def test_one_legal_card_and_finished_observation(monkeypatch):
 
 def test_objective_is_reward_not_score_or_win_rate(monkeypatch):
     obs = replace(position(), hand=position().hand[:2])
-    def fake(observation, cards, templates, seed, trial, check):
+    def fake(observation, cards, templates, seed, trial, check, **kwargs):
         return [dict(reward=1, score=0, sole_win=0, joint_win=1),
                 dict(reward=-1, score=1000, sole_win=1, joint_win=0)]
     monkeypatch.setattr(module, 'rollout_trial', fake)
@@ -129,7 +129,7 @@ def test_timeout_fallback_and_incomplete_trials_discarded(monkeypatch):
     assert empty.card == min(obs.hand)
     assert empty.details.optional_metadata['timed_out']
     assert all(c.score is None for c in empty.details.candidates)
-    def fake(observation, cards, templates, seed, trial, check):
+    def fake(observation, cards, templates, seed, trial, check, **kwargs):
         if trial == 1:
             raise _BudgetExpired
         return [dict(reward=0, score=0, sole_win=0, joint_win=1) for c in cards]
@@ -161,7 +161,7 @@ def test_all_lightweight_continuations(name):
 
 def test_maximum_trial_budget_is_exact(monkeypatch):
     calls = []
-    def fake(obs, cards, templates, seed, trial, check):
+    def fake(obs, cards, templates, seed, trial, check, **kwargs):
         calls.append(trial)
         return [dict(reward=0, score=0, sole_win=0, joint_win=1) for c in cards]
     monkeypatch.setattr(module, 'rollout_trial', fake)

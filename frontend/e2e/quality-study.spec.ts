@@ -1,0 +1,52 @@
+import {test,expect} from '@playwright/test';
+
+test('探索品質の小規模実験を保存し、不確実性・時間・履歴を表示する',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'探索品質',exact:true}).click();
+ const panel=page.getByRole('region',{name:'Rolloutの探索品質評価',exact:true});
+ const editor=panel.getByLabel('探索品質実験の設定JSON');
+ await expect(editor).toHaveValue(/baseline_commit/);
+ const config=JSON.parse(await editor.inputValue());
+ config.name='ブラウザ小規模検証';config.deal_seeds=[10,11];config.analyze_position=false;
+ config.settings=[{trials:1,continuation:'Random',time_limit_ms:0},{trials:2,continuation:'ScoreAware',time_limit_ms:0}];
+ await editor.fill(JSON.stringify(config));
+ await panel.getByRole('button',{name:'実験規模を見積もる',exact:true}).click();
+ await expect(panel.getByRole('status')).toContainText('予定 24対局');
+ const response=page.waitForResponse(r=>r.url().endsWith('/api/quality-studies')&&r.request().method()==='POST');
+ await panel.getByRole('button',{name:'この計画で実行',exact:true}).click();
+ const id=(await(await response).json()).id;
+ await expect(panel.getByRole('status').filter({hasText:'完了'})).toContainText('24 / 24');
+ await expect(panel).toContainText('百分位ブートストラップ');
+ await expect(panel.locator('table').first().locator('tbody tr')).toHaveCount(2);
+ await expect(panel.getByRole('img',{name:'Rollout設定別の平均終局報酬と95%区間',exact:true})).toBeVisible();
+ await expect(panel.getByRole('img',{name:'判断時間と平均終局報酬の散布図',exact:true})).toBeVisible();
+ await expect(panel.getByRole('img',{name:'基準設定との対応報酬差と95%区間',exact:true})).toBeVisible();
+ const download=page.waitForEvent('download');await panel.getByRole('button',{name:'結果JSONを保存',exact:true}).click();
+ expect((await download).suggestedFilename()).toBe('rollout-quality-'+id+'.json');
+ await page.reload();await page.getByRole('button',{name:'探索品質',exact:true}).click();
+ await panel.getByLabel('保存済み探索品質実験').selectOption(id);
+ await expect(panel.getByRole('status').filter({hasText:'完了'})).toContainText('24 / 24');
+ await page.setViewportSize({width:390,height:844});
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+});
+
+test('不正計画の拒否と、中断を完了と区別する',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'探索品質',exact:true}).click();
+ const panel=page.getByRole('region',{name:'Rolloutの探索品質評価',exact:true});
+ const editor=panel.getByLabel('探索品質実験の設定JSON');
+ await expect(editor).toHaveValue(/baseline_commit/);
+ const config=JSON.parse(await editor.inputValue());config.deal_seeds=[0,0];
+ await editor.fill(JSON.stringify(config));await panel.getByRole('button',{name:'実験規模を見積もる',exact:true}).click();
+ await expect(panel.getByRole('alert')).toBeVisible();
+ config.deal_seeds=[0];config.settings=config.settings.slice(0,1);config.analyze_position=false;
+ await editor.fill(JSON.stringify(config));
+ let cancelled=false;
+ const result=()=>({id:'mock',status:cancelled?'cancelled':'running',baseline_commit:config.baseline_commit,config,estimate:{games:6,independent_deals:1,rollout_upper_bound:7200,note:'検証'},completed_games:0,elapsed_seconds:0,error:null,positions:[],summary:{settings:[],differences:[],baseline:'8/Random/None',method:'配札単位',warning:'独立配札不足'}});
+ await page.route('**/api/quality-studies',route=>route.fulfill({json:route.request().method()==='POST'?result():[]}));
+ await page.route('**/api/quality-studies/mock',route=>route.fulfill({json:result()}));
+ await page.route('**/api/quality-studies/mock/cancel',route=>{cancelled=true;return route.fulfill({json:result()});});
+ await panel.getByRole('button',{name:'実験規模を見積もる',exact:true}).click();await panel.getByRole('button',{name:'この計画で実行',exact:true}).click();
+ await expect(panel.getByRole('status').filter({hasText:'実行中'})).toBeVisible();
+ await panel.getByRole('button',{name:'実験を中断',exact:true}).click();
+ await expect(panel.getByRole('status').filter({hasText:'中断'})).toBeVisible();
+ await expect(panel).toContainText('未完了の実験です');
+});

@@ -1,0 +1,28 @@
+{
+  "baseline_commit": "8b380bec5e85f6368f7aa2f1c49db818f3abb160",
+  "deal_seeds": [
+    0
+  ],
+  "policy_seed": 42,
+  "opponents": [
+    "Random",
+    "Heuristic"
+  ],
+  "analyze_position": true,
+  "timeout_seconds": 300,
+  "name": "B: 継続戦略比較（8試行）",
+  "settings": [
+    {
+      "trials": 8,
+      "continuation": "Random"
+    },
+    {
+      "trials": 8,
+      "continuation": "Greedy"
+    },
+    {
+      "trials": 8,
+      "continuation": "ScoreAware"
+    }
+  ]
+}

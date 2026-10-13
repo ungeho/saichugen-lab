@@ -13,25 +13,29 @@ def derived_seed(seed: int, identity: str) -> int:
     return int.from_bytes(sha256(f"{seed}:{identity}".encode()).digest()[:8], "big")
 
 
-def _play_game(seed: int, names: tuple[str, str, str], capture_details: bool, capture_trace: bool):
+def _play_game(seed: int, names: tuple[str, str, str], capture_details: bool, capture_trace: bool,
+               *, strategies=None, rngs=None, check=lambda: None):
     if len(names) != 3:
         raise ValueError("3戦略が必要")
     game = Game(seed)
-    strategies = [create_strategy(name) for name in names]
+    strategies = [create_strategy(name) for name in names] if strategies is None else strategies
     # 同名戦略にも独立系列を与え、座席とは別に識別する。
     identities = [f"{name}:{names[:p].count(name)}" for p, name in enumerate(names)]
-    rngs = [Random(derived_seed(seed, identity)) for identity in identities]
+    rngs = [Random(derived_seed(seed, identity)) for identity in identities] if rngs is None else rngs
     trace = []
     total_times = [0, 0, 0]
     while not game.finished:
+        check()
         observations = [game.observe(p) for p in range(3)]
         decisions = []
         times = []
         for p, (strategy, observation, rng) in enumerate(zip(strategies, observations, rngs)):
+            check()
             start = perf_counter_ns()
             decisions.append(decide(strategy, observation, rng, capture_details))
             times.append(perf_counter_ns() - start)
             total_times[p] += times[-1]
+            check()
         event = game.play(tuple(d.card for d in decisions))
         if capture_trace:
             trace.append({"turn": event.index, "decisions": [decision_record(d, obs, capture_details)

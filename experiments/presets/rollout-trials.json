@@ -1,0 +1,32 @@
+{
+  "baseline_commit": "8b380bec5e85f6368f7aa2f1c49db818f3abb160",
+  "deal_seeds": [
+    0
+  ],
+  "policy_seed": 42,
+  "opponents": [
+    "Random",
+    "Heuristic"
+  ],
+  "analyze_position": true,
+  "timeout_seconds": 300,
+  "name": "A: 試行回数比較（Random継続）",
+  "settings": [
+    {
+      "trials": 8,
+      "continuation": "Random"
+    },
+    {
+      "trials": 16,
+      "continuation": "Random"
+    },
+    {
+      "trials": 32,
+      "continuation": "Random"
+    },
+    {
+      "trials": 64,
+      "continuation": "Random"
+    }
+  ]
+}

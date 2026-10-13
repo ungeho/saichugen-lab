@@ -57,6 +57,10 @@ class MonteCarloRollout:
         completed = 0
         fallback = "合法手が1枚のため探索不要" if len(cards) == 1 else None
         timed_out = False
+        game_counts = {"started": 0, "finished": 0}
+
+        def on_game(stage):
+            game_counts[stage] += 1
 
         def check():
             if self.time_limit_ms is not None and (perf_counter_ns() - started) / 1e6 >= self.time_limit_ms:
@@ -67,7 +71,7 @@ class MonteCarloRollout:
             for trial in range(self.trials):
                 try:
                     check()
-                    rows = rollout_trial(observation, cards, templates, seed, trial, check)
+                    rows = rollout_trial(observation, cards, templates, seed, trial, check, on_game=on_game)
                     check()
                 except _BudgetExpired:
                     timed_out = True
@@ -121,6 +125,7 @@ class MonteCarloRollout:
                 optional_metadata={"kind": "monte_carlo_rollout", "seed": str(seed), "parameters": self.parameters,
                                    "completed_trials": completed, "candidate_count": len(cards),
                                    "completed_games": completed * len(cards), "elapsed_ms": elapsed,
+                                   "started_games": game_counts["started"], "executed_games": game_counts["finished"],
                                    "timed_out": timed_out, "fallback": fallback, "candidates": stats,
                                    "best_vs_runner_up": pair, "sampler": "uniform-unseen-v1",
                                    "continuation_version": "1", "state_policy": "registered_initial_v1"})

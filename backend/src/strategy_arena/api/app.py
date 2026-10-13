@@ -23,6 +23,8 @@ from ..strategies.base import Decision, decide, decision_record
 from ..experiments.catalog_statistics import algorithm_statistics
 from ..comparison import compare_position, initial_strategy_copies, position_at
 from ..branch_simulation import BranchJobs
+from ..experiments.rollout_quality import StudyConfig, estimate, presets
+from ..experiments.quality_jobs import QualityJobs
 from ..rule_guide import rule_guide, judge
 from contextlib import asynccontextmanager
 
@@ -81,10 +83,52 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     async def lifespan(app):
         yield
         jobs.close()
+        quality.close()
     app = FastAPI(title="Strategy Arena", lifespan=lifespan)
     sessions = {}
     lock = Lock()
     store = ExperimentStore(database)
+    quality = QualityJobs(store)
+
+    @app.get("/api/quality-studies/presets")
+    def quality_presets():
+        return presets()
+
+    @app.post("/api/quality-studies/estimate")
+    def quality_estimate(config: StudyConfig):
+        return estimate(config)
+
+    @app.get("/api/quality-studies")
+    def quality_history():
+        return quality.history()
+
+    @app.post("/api/quality-studies", status_code=202)
+    def quality_start(config: StudyConfig):
+        try:
+            return quality.submit(config)
+        except RuntimeError as error:
+            raise HTTPException(409, str(error)) from None
+
+    @app.get("/api/quality-studies/{identifier}")
+    def quality_get(identifier: str):
+        try:
+            return quality.get(identifier)
+        except KeyError:
+            raise HTTPException(404, "探索品質実験が見つかりません") from None
+
+    @app.get("/api/quality-studies/{identifier}/export")
+    def quality_export(identifier: str):
+        try:
+            return quality.get(identifier, full=True)
+        except KeyError:
+            raise HTTPException(404, "探索品質実験が見つかりません") from None
+
+    @app.post("/api/quality-studies/{identifier}/cancel")
+    def quality_cancel(identifier: str):
+        try:
+            return quality.cancel(identifier)
+        except KeyError:
+            raise HTTPException(404, "探索品質実験が見つかりません") from None
 
     @app.get("/api/health")
     def health():
@@ -279,6 +323,8 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         payload = store.get(identifier)
         if payload is None:
             raise HTTPException(404, "実験が見つかりません")
+        if payload.get("experiment_kind") == "rollout_quality_v1":
+            return quality.get(identifier, full=True)
         return {"id": identifier, **enrich_payload(payload)}
 
     return app
