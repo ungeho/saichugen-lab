@@ -1,5 +1,6 @@
 import json
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from uuid import uuid4
 
@@ -29,6 +30,9 @@ class ExperimentStore:
                 raise KeyError(identifier)
 
     def iter_experiments(self):
-        with sqlite3.connect(self.path) as connection:
-            for identifier, payload in connection.execute("SELECT id, payload FROM experiments ORDER BY rowid"):
-                yield identifier, json.loads(payload)
+        # 呼び出し側が履歴を集計・再読込している間、読取ロックを保持しない。
+        # 同じDBへ進捗を保存するワーカーとのロック待ち循環を避ける。
+        with closing(sqlite3.connect(self.path)) as connection:
+            rows = connection.execute("SELECT id, payload FROM experiments ORDER BY rowid").fetchall()
+        for identifier, payload in rows:
+            yield identifier, json.loads(payload)

@@ -1,0 +1,22 @@
+{
+  "opponents": [
+    "Random",
+    "Heuristic"
+  ],
+  "seed_partition": "development",
+  "policy_seed": 42,
+  "include_expensive": false,
+  "timeout_seconds": 180,
+  "participants": [
+    "codex_reserve@1.0.0",
+    "codex_round_driver@1.0.0",
+    "codex_score_planner@1.0.0",
+    "codex_opponent_reader@1.0.0",
+    "codex_adaptive_theorist@1.0.0",
+    "Random",
+    "Heuristic",
+    "ScoreAware"
+  ],
+  "deals": 2,
+  "start_offset": 200
+}

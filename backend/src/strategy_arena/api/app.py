@@ -28,6 +28,8 @@ from ..experiments.quality_jobs import QualityJobs
 from ..experiments.quality_statistics import compare_saved
 from ..strategies.theories import TheoryConfig, theory_catalog
 from ..strategies.theory_policy import TheoryPolicy
+from ..strategies.declarative import DefinitionStore,StrategyDefinition
+from ..experiments.arena import ArenaRequest,arena_jobs,arena_estimate,compare_arena,KIND as ARENA_KIND
 from ..rule_guide import rule_guide, judge
 from contextlib import asynccontextmanager
 
@@ -101,11 +103,68 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         yield
         jobs.close()
         quality.close()
+        arena.close()
     app = FastAPI(title="Strategy Arena", lifespan=lifespan)
     sessions = {}
     lock = Lock()
     store = ExperimentStore(database)
     quality = QualityJobs(store)
+    definitions=DefinitionStore(database)
+    arena=arena_jobs(store)
+
+    @app.get('/api/arena/strategies')
+    def arena_strategies():
+        declared=definitions.list()
+        ids={d['id'] for d in declared}
+        records=list(store.iter_experiments())
+        return {'builtins':[n for n in strategy_names() if n not in ids],
+                'definitions':[{**d,'reference':d['id']+'@'+d['version'],'verification':'未検証の仮説',
+                    'children':[x['id']+'@'+x['version'] for x in declared if x.get('parent') and x['parent']['definition_hash']==d['definition_hash']],
+                    'experiment_ids':[i for i,p in records if p.get('experiment_kind')==ARENA_KIND and any((s.get('definition') or {}).get('definition_hash')==d['definition_hash'] for s in p['config']['settings'])]} for d in declared]}
+
+    @app.get('/api/arena/schema')
+    def arena_schema():return StrategyDefinition.model_json_schema()
+
+    @app.post('/api/arena/definitions',status_code=201)
+    def arena_register(definition:StrategyDefinition):
+        try:return definitions.add(definition).model_dump(mode='json')
+        except ValueError as e:raise HTTPException(422,str(e)) from None
+
+    @app.post('/api/arena/estimate')
+    def arena_preview(request:ArenaRequest):
+        try:return arena_estimate(request.resolve(definitions))
+        except ValueError as e:raise HTTPException(422,str(e)) from None
+
+    @app.get('/api/arena/studies')
+    def arena_history():return arena.history()
+
+    @app.post('/api/arena/studies',status_code=202)
+    def arena_start(request:ArenaRequest):
+        try:return arena.submit(request.resolve(definitions))
+        except ValueError as e:raise HTTPException(422,str(e)) from None
+        except RuntimeError as e:raise HTTPException(409,str(e)) from None
+
+    @app.get('/api/arena/studies/{identifier}')
+    def arena_read(identifier:str):
+        try:return arena.get(identifier)
+        except KeyError:raise HTTPException(404,'Arena実験がありません') from None
+
+    @app.get('/api/arena/studies/{identifier}/export')
+    def arena_export(identifier:str):
+        try:return arena.get(identifier,full=True)
+        except KeyError:raise HTTPException(404,'Arena実験がありません') from None
+
+    @app.post('/api/arena/studies/{identifier}/cancel')
+    def arena_stop(identifier:str):
+        try:return arena.cancel(identifier)
+        except KeyError:raise HTTPException(404,'Arena実験がありません') from None
+
+    @app.post('/api/arena/compare')
+    @app.post('/api/arena/studies/compare')
+    def arena_comparison(request:StudyComparison):
+        try:return compare_arena(arena.get(request.first_id,True),arena.get(request.second_id,True),request.first_setting,request.second_setting)
+        except KeyError:raise HTTPException(404,'Arena実験がありません') from None
+        except ValueError as e:raise HTTPException(422,str(e)) from None
 
     @app.get('/api/theories')
     def theories():

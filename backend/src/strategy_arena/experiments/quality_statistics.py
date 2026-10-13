@@ -44,8 +44,8 @@ def complete_deals(config, rows, setting):
                         or type(rotation) is not int or tuple(row["roles"]) != roles
                         or type(row["seat"]) is not int or row["seat"] != roles.index(0)
                         or tuple(row["strategies"]) != names
-                        or Setting.model_validate(row["rollout_parameters"]).model_dump() != setting.model_dump()
-                        or row["strategy_version"] != "1"
+                        or type(setting).model_validate(row["rollout_parameters"]).model_dump() != setting.model_dump()
+                        or row["strategy_version"] != getattr(setting,'strategy_version','1')
                         or any(type(v) is not int for v in row["terminal_rewards"])
                         or tuple(row["terminal_rewards"]) != terminal_rewards(row["winners"])):
                     raise ValueError("比較条件不一致")
@@ -86,7 +86,7 @@ def paired_clusters(first, second, first_setting, second_setting, seed):
 
 def decision_sources(payload):
     hashes=payload.get("runtime",{}).get("source_sha256",{})
-    return {k:v for k,v in hashes.items() if k.startswith(("game/","strategies/")) or k in ("rollouts.py","inference.py","experiments/runner.py","experiments/rollout_quality.py")}
+    return {k:v for k,v in hashes.items() if k.startswith(("game/","strategies/")) or k in ("rollouts.py","inference.py","experiments/runner.py","experiments/rollout_quality.py","experiments/arena.py")}
 
 
 def compare_saved(first, second, first_name, second_name):

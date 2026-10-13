@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "id": "codex_opponent_reader",
+  "name": "Codex / 公開得点から相手目標を仮定",
+  "version": "1.0.0",
+  "creator": "Codex / Phase21",
+  "description": "相手が中位以下なら獲得、上なら回避を望むと仮定する。行動履歴からの学習ではないという未検証の仮説を比較する。",
+  "hypothesis": "相手が中位以下なら獲得、上なら回避を望むと仮定する。行動履歴からの学習ではないことで終局報酬が改善するか。",
+  "rationale": "将来の選択肢と現在・最終の中間順位のどれを重視するかを分離して検証するため。一様出札だけではなく公開点に応じた相手の出札重みを使う",
+  "expected_strengths": [
+    "相手がScoreAwareに似た行動をする局面で有利と予想。未確認。"
+  ],
+  "expected_weaknesses": [
+    "Randomや仮定と異なる相手への偏り。未確認。"
+  ],
+  "difference_from_existing": "一様出札だけではなく公開点に応じた相手の出札重みを使う",
+  "theory_config": {
+    "theories": [
+      {
+        "id": "opponent_targets",
+        "version": "1",
+        "enabled": true,
+        "weight": 1.0,
+        "params": {
+          "strength": 1.0
+        }
+      },
+      {
+        "id": "public_memory",
+        "version": "1",
+        "enabled": true,
+        "weight": 0.25,
+        "params": {
+          "public": true
+        }
+      }
+    ],
+    "tie_break": "seeded_random"
+  },
+  "rules": [],
+  "selection": "theory",
+  "total_budget": null,
+  "continuation": "Random",
+  "seed_mode": "evaluator_rng",
+  "fixed_policy_seed": null,
+  "parent": null,
+  "change_summary": "初期候補",
+  "change_reason": "未検証の仮説を比較するため",
+  "created_at": "2026-10-13T10:34:36.907758Z",
+  "definition_hash": "f58d9026352db6b39ceec575a3ba050bae46b2d6fcc49a2c857f04619986a44c"
+}

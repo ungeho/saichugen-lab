@@ -62,3 +62,8 @@ from .theory_policy import TheoryPolicy, TheorySearch, description as theory_des
 register('theory_policy',TheoryPolicy,theory_description())
 register('theory_search',TheorySearch,theory_description(True))
 register('theory_search_adaptive',lambda:TheorySearch(adaptive=True),theory_description(True))
+
+from .declarative import builtin_definitions, DeclarativeStrategy, description as declarative_description
+
+for definition in builtin_definitions():
+    register(definition.id,lambda d=definition:DeclarativeStrategy(d),declarative_description(definition))

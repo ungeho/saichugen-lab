@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "id": "codex_round_driver",
+  "name": "Codex / 現在ラウンド重視",
+  "version": "1.0.0",
+  "creator": "Codex / Phase21",
+  "description": "現在ラウンドの中間目標へ近づける距離を優先するという未検証の仮説を比較する。",
+  "hypothesis": "現在ラウンドの中間目標へ近づける距離を優先することで終局報酬が改善するか。",
+  "rationale": "将来の選択肢と現在・最終の中間順位のどれを重視するかを分離して検証するため。Greedyの常時獲得、ScoreAwareの符号切替に対し距離を主に使う",
+  "expected_strengths": [
+    "ラウンド得点に差がある局面で有利と予想。未確認。"
+  ],
+  "expected_weaknesses": [
+    "累計が過大でも現在点を優先する可能性。未確認。"
+  ],
+  "difference_from_existing": "Greedyの常時獲得、ScoreAwareの符号切替に対し距離を主に使う",
+  "theory_config": {
+    "theories": [
+      {
+        "id": "public_memory",
+        "version": "1",
+        "enabled": true,
+        "weight": 0.25,
+        "params": {
+          "public": true
+        }
+      },
+      {
+        "id": "round_focus",
+        "version": "1",
+        "enabled": true,
+        "weight": 1.0,
+        "params": {
+          "mode": "round"
+        }
+      }
+    ],
+    "tie_break": "seeded_random"
+  },
+  "rules": [],
+  "selection": "theory",
+  "total_budget": null,
+  "continuation": "Random",
+  "seed_mode": "evaluator_rng",
+  "fixed_policy_seed": null,
+  "parent": null,
+  "change_summary": "初期候補",
+  "change_reason": "未検証の仮説を比較するため",
+  "created_at": "2026-10-13T10:34:36.906172Z",
+  "definition_hash": "d081862c3726b647a661e780666a56af2a01880ef59d4a38e8cd0c8e37a9838d"
+}

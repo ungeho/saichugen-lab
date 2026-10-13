@@ -40,7 +40,8 @@ test('Hybrid Labの同一総予算実験と配分表示・不一致設定の拒�
  await panel.getByRole('button',{name:'実験規模を見積もる',exact:true}).click();
  await expect(panel.getByRole('status')).toContainText('予定 24対局');
  await panel.getByRole('button',{name:'この計画で実行',exact:true}).click();
- await expect(panel.getByRole('status').filter({hasText:'完了'})).toContainText('24 / 24');
+ // 実験は非同期。画面要素の既定5秒では低速環境の正常計算を失敗と判定する。
+ await expect(panel.getByRole('status').filter({hasText:'完了'})).toContainText('24 / 24',{timeout:30000});
  await expect(panel.locator('table').first().locator('tbody tr')).toHaveCount(4);
  await expect(panel.locator('table').first()).toContainText('Hybrid C 組み合わせ · 総予算20');
  await expect(panel.locator('table').first()).toContainText('10件未満のため区間を表示しません');

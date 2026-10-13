@@ -15,3 +15,5 @@ nav{flex-wrap:wrap}.rules-page{display:grid;gap:20px}.rules-page>.section-title{
 .quality-study{display:grid;gap:20px}.quality-study textarea{width:100%;font-family:monospace;box-sizing:border-box;background:#14212c;color:#e7eef6;border:1px solid #526578;border-radius:8px;padding:12px}.quality-study pre{white-space:pre-wrap;overflow-wrap:anywhere;max-height:450px;overflow:auto}.quality-study code,.quality-study p{overflow-wrap:anywhere}.quality-study fieldset{min-width:0}.quality-study select{max-width:100%}
 
 .quality-study{min-width:0;grid-template-columns:minmax(0,1fr)}.quality-study>.panel,.quality-study .charts,.quality-study .charts>.panel{min-width:0}.quality-study .chart{min-width:0;width:100%}
+
+.strategy-arena h3,.strategy-arena td{overflow-wrap:anywhere}.strategy-arena input[type=checkbox]{width:auto}.strategy-arena select{width:100%;min-width:0}

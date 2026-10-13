@@ -280,7 +280,7 @@ def summarize_study(config, rows, partial_games=()):
         info = uncertainty(list(means.values()), config.policy_seed)
         timings = [d["elapsed_ns"]/1e6 for r in costs for d in r["decisions"]]
         mean = lambda seq: float(np.mean(seq)) if seq else None
-        summaries.append({"setting": setting.identifier, "parameters": setting.model_dump(),
+        summaries.append({"setting": setting.identifier, "parameters": setting.model_dump(mode='json'),
             "games": len(used), "recorded_games": len(recorded), "excluded_partial_games": len(recorded)-len(used),
             "independent_deals": len(complete), "average_terminal_reward": mean(list(means.values())),
             "reward_ci95": info["ci95"], "uncertainty": info,

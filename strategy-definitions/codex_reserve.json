@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "id": "codex_reserve",
+  "name": "Codex / 選択肢温存",
+  "version": "1.0.0",
+  "creator": "Codex / Phase21",
+  "description": "強い札と中程度の札を残して将来の調整余地を保つという未検証の仮説を比較する。",
+  "hypothesis": "強い札と中程度の札を残して将来の調整余地を保つことで終局報酬が改善するか。",
+  "rationale": "将来の選択肢と現在・最終の中間順位のどれを重視するかを分離して検証するため。Heuristicのランク7から遠い札を残す項とは違い中程度も残す",
+  "expected_strengths": [
+    "序盤の札の幅で有利と予想。未確認。"
+  ],
+  "expected_weaknesses": [
+    "現在ラウンドを逃す可能性。未確認。"
+  ],
+  "difference_from_existing": "Heuristicのランク7から遠い札を残す項とは違い中程度も残す",
+  "theory_config": {
+    "theories": [
+      {
+        "id": "reserve_middle",
+        "version": "1",
+        "enabled": true,
+        "weight": 1.0,
+        "params": {
+          "mode": "preserve",
+          "center": 7.0,
+          "width": 2.0
+        }
+      },
+      {
+        "id": "reserve_strong",
+        "version": "1",
+        "enabled": true,
+        "weight": 0.6,
+        "params": {
+          "mode": "preserve",
+          "threshold": 10.0
+        }
+      },
+      {
+        "id": "round_focus",
+        "version": "1",
+        "enabled": true,
+        "weight": 0.25,
+        "params": {
+          "mode": "round"
+        }
+      }
+    ],
+    "tie_break": "seeded_random"
+  },
+  "rules": [],
+  "selection": "theory",
+  "total_budget": null,
+  "continuation": "Random",
+  "seed_mode": "evaluator_rng",
+  "fixed_policy_seed": null,
+  "parent": null,
+  "change_summary": "初期候補",
+  "change_reason": "未検証の仮説を比較するため",
+  "created_at": "2026-10-13T10:34:36.905162Z",
+  "definition_hash": "fd13117fcfa26a3bea187f125e3536c5cb471073baee9933f17b1e46df84cc68"
+}

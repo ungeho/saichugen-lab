@@ -1,0 +1,19 @@
+{
+  "opponents": [
+    "Random",
+    "Heuristic"
+  ],
+  "seed_partition": "validation",
+  "policy_seed": 42,
+  "include_expensive": true,
+  "timeout_seconds": 180,
+  "participants": [
+    "codex_reserve@1.0.0",
+    "codex_adaptive_theorist@1.0.0",
+    "Heuristic",
+    "monte_carlo_rollout",
+    "budget_rollout"
+  ],
+  "deals": 2,
+  "start_offset": 100
+}

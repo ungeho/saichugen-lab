@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "id": "codex_score_planner",
+  "name": "Codex / 累計逆算",
+  "version": "1.0.0",
+  "creator": "Codex / Phase21",
+  "description": "累計の中間目標との距離を主にして過大な得点を避けるという未検証の仮説を比較する。",
+  "hypothesis": "累計の中間目標との距離を主にして過大な得点を避けることで終局報酬が改善するか。",
+  "rationale": "将来の選択肢と現在・最終の中間順位のどれを重視するかを分離して検証するため。Heuristicの累計過大時の回避だけでなく累計距離を代理評価する",
+  "expected_strengths": [
+    "累計差が生じた中盤と終盤で有利と予想。未確認。"
+  ],
+  "expected_weaknesses": [
+    "序盤に同点が多く仮の終了モデルに依存。未確認。"
+  ],
+  "difference_from_existing": "Heuristicの累計過大時の回避だけでなく累計距離を代理評価する",
+  "theory_config": {
+    "theories": [
+      {
+        "id": "cumulative_target",
+        "version": "1",
+        "enabled": true,
+        "weight": 1.0,
+        "params": {}
+      },
+      {
+        "id": "round_focus",
+        "version": "1",
+        "enabled": true,
+        "weight": 0.35,
+        "params": {
+          "mode": "round"
+        }
+      }
+    ],
+    "tie_break": "seeded_random"
+  },
+  "rules": [],
+  "selection": "theory",
+  "total_budget": null,
+  "continuation": "Random",
+  "seed_mode": "evaluator_rng",
+  "fixed_policy_seed": null,
+  "parent": null,
+  "change_summary": "初期候補",
+  "change_reason": "未検証の仮説を比較するため",
+  "created_at": "2026-10-13T10:34:36.906172Z",
+  "definition_hash": "761c6238be0dd3721b9a7a2063f3b0f1641b7a4c74941de0aa414e8fb81a4ec1"
+}

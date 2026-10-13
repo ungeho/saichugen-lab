@@ -14,8 +14,11 @@ class StudyStopped(Exception):
 
 
 class QualityJobs:
-    def __init__(self, store):
+    def __init__(self, store, *, kind=KIND, config_model=None, runner=None, prober=None, summarizer=None, planner=None, seed_scheme='quality-policy-v1'):
         self.store = store
+        self.kind,self.config_model=kind,config_model or StudyConfig
+        self.runner,self.prober,self.summarizer,self.planner=runner,prober,summarizer,planner
+        self.seed_scheme=seed_scheme
         self.lock = Lock()
         self.active = None
         self.cancel_event = None
@@ -26,14 +29,14 @@ class QualityJobs:
         with self.lock:
             if self.closed or self.active is not None:
                 raise RuntimeError("探索品質実験は1件ずつ実行してください")
-            payload = {"experiment_kind": KIND, "schema_version": 1, "status": "running",
-                       "baseline_commit": config.baseline_commit, "config": config.model_dump(),
+            payload = {"experiment_kind": self.kind, "schema_version": 1, "status": "running",
+                       "baseline_commit": config.baseline_commit, "config": config.model_dump(mode='json'),
                        "rule_version": RULE_VERSION, "reward_version": REWARD_VERSION,
-                       "runtime": runtime_info(), "estimate": estimate(config,[p for i,p in self.store.iter_experiments()]), "results": [], "positions": [], "partial_games": [],
-                       "information_condition":"imperfect", "runner_seed_scheme":"quality-policy-v1",
+                       "runtime": runtime_info(), "estimate": (self.planner or estimate)(config,[p for i,p in self.store.iter_experiments()]), "results": [], "positions": [], "partial_games": [],
+                       "information_condition":"imperfect", "runner_seed_scheme":self.seed_scheme,
                        "statistics_version":"deal-cluster-v2",
-                       "strategy_manifest":[{'setting':s.identifier,'strategy_id':s.strategy_name,'strategy_version':'1',
-                           'parameters':s.model_dump(),'theories':s.theory_config.model_dump() if s.theory_config else None,
+                       "strategy_manifest":[{'setting':s.identifier,'strategy_id':s.strategy_name,'strategy_version':getattr(s,'strategy_version','1'),
+                           'parameters':s.model_dump(mode='json'),'theories':s.theory_config.model_dump() if s.theory_config else None,
                            'parent_strategy':'HybridSearch' if s.method.startswith('theory_search') else None,
                            'hypothesis_status':'未検証' if s.method.startswith('theory') else '比較対象'} for s in config.settings],
                        "theory_manifest":[d for d in theory_catalog() if any(s.theory_config and any(t.id==d['id'] for t in s.theory_config.theories) for s in config.settings)],
@@ -60,9 +63,9 @@ class QualityJobs:
                 persist()
             try:
                 if config.analyze_position:
-                    payload["positions"].append(probe(config, check))
+                    payload["positions"].append((self.prober or probe)(config, check))
                     persist()
-                run_study(config, on_row, check, on_partial)
+                (self.runner or run_study)(config, on_row, check, on_partial)
                 check()
                 payload["status"] = "completed"
             except StudyStopped as error:
@@ -82,7 +85,7 @@ class QualityJobs:
 
     def get(self, identifier, full=False):
         payload = self.store.get(identifier)
-        if payload is None or payload.get("experiment_kind") != KIND:
+        if payload is None or payload.get("experiment_kind") != self.kind:
             raise KeyError(identifier)
         with self.lock:
             if payload["status"] in ("running", "cancelling") and identifier not in self.owned:
@@ -90,9 +93,9 @@ class QualityJobs:
             cancelling = identifier == self.active and self.cancel_event.is_set()
         if cancelling:
             payload["status"] = "cancelling"
-        config = StudyConfig.model_validate(payload["config"])
+        config = self.config_model.model_validate(payload["config"])
         result = {"id": identifier, **payload, "completed_games": len(payload["results"]),
-                  "summary": summarize_study(config, payload["results"], payload.get("partial_games", []))}
+                  "summary": (self.summarizer or summarize_study)(config, payload["results"], payload.get("partial_games", []))}
         if not full:
             result.pop("results")
             result.pop("partial_games", None)
@@ -108,7 +111,7 @@ class QualityJobs:
     def history(self):
         return [{"id": i, "name": p["config"]["name"], "status": self.get(i)["status"],
                  "completed_games": len(p["results"])}
-                for i,p in self.store.iter_experiments() if p.get("experiment_kind") == KIND]
+                for i,p in self.store.iter_experiments() if p.get("experiment_kind") == self.kind]
 
     def close(self):
         with self.lock:

@@ -1,0 +1,97 @@
+{
+  "schema_version": 1,
+  "id": "codex_adaptive_theorist",
+  "name": "Codex / 局面で重みを切り替える",
+  "version": "1.0.0",
+  "creator": "Codex / Phase21",
+  "description": "序盤は札、中盤はラウンド、終盤と累計過大時は累計距離を重視するという未検証の仮説を比較する。",
+  "hypothesis": "序盤は札、中盤はラウンド、終盤と累計過大時は累計距離を重視することで終局報酬が改善するか。",
+  "rationale": "将来の選択肢と現在・最終の中間順位のどれを重視するかを分離して検証するため。固定係数と異なり公開累計と進行で最初一致の規則を適用する",
+  "expected_strengths": [
+    "得点調整の要求が途中で変化する局面で有利と予想。未確認。"
+  ],
+  "expected_weaknesses": [
+    "未調整の境界や重みにより判断が不連続になる。未確認。"
+  ],
+  "difference_from_existing": "固定係数と異なり公開累計と進行で最初一致の規則を適用する",
+  "theory_config": {
+    "theories": [
+      {
+        "id": "cumulative_target",
+        "version": "1",
+        "enabled": true,
+        "weight": 0.5,
+        "params": {}
+      },
+      {
+        "id": "reserve_middle",
+        "version": "1",
+        "enabled": true,
+        "weight": 0.5,
+        "params": {
+          "mode": "preserve",
+          "center": 7.0,
+          "width": 2.0
+        }
+      },
+      {
+        "id": "round_focus",
+        "version": "1",
+        "enabled": true,
+        "weight": 0.5,
+        "params": {
+          "mode": "round"
+        }
+      }
+    ],
+    "tie_break": "seeded_random"
+  },
+  "rules": [
+    {
+      "phase": "any",
+      "score_position": "high",
+      "round_min": 1,
+      "round_max": 5,
+      "weights": {
+        "cumulative_target": 1.5,
+        "round_focus": 0.25,
+        "reserve_middle": 0.1
+      },
+      "explanation": "単独最高累計なら距離を優先"
+    },
+    {
+      "phase": "early",
+      "score_position": "any",
+      "round_min": 1,
+      "round_max": 5,
+      "weights": {
+        "reserve_middle": 1.2,
+        "round_focus": 0.3,
+        "cumulative_target": 0.1
+      },
+      "explanation": "序盤は選択肢を温存"
+    },
+    {
+      "phase": "late",
+      "score_position": "any",
+      "round_min": 1,
+      "round_max": 5,
+      "weights": {
+        "reserve_middle": 0.1,
+        "round_focus": 0.7,
+        "cumulative_target": 1.2
+      },
+      "explanation": "終盤は得点調整"
+    }
+  ],
+  "selection": "theory",
+  "total_budget": null,
+  "continuation": "Random",
+  "seed_mode": "evaluator_rng",
+  "fixed_policy_seed": null,
+  "parent": null,
+  "change_summary": "初期候補",
+  "change_reason": "未検証の仮説を比較するため",
+  "created_at": "2026-10-13T10:34:36.909314Z",
+  "definition_hash": "0ab5f2ffbe07c9dba927a4093e9e4eb8bb7691209f1c90d794e11d984b953693"
+}
