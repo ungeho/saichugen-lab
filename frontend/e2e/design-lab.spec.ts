@@ -1,0 +1,34 @@
+import {test,expect} from '@playwright/test';
+
+test('草案・事前登録・Hash付き実行を分離し共有配札の効果差を保存する',async({page,request})=>{
+ await page.goto('/');await page.getByRole('button',{name:'Experimental Design Lab',exact:true}).click();
+ const panel=page.getByRole('region',{name:'Experimental Design Lab',exact:true});
+ await panel.getByRole('button',{name:'局面切替B単独の追試案を準備',exact:true}).click();
+ const editor=panel.getByLabel('Experiment Plan JSON');await expect(editor).toHaveValue(/adaptive-b-opponent-pilot/);
+ const spec=JSON.parse(await editor.inputValue());spec.plan_id='design-e2e-'+Date.now();spec.evaluation.start_offset=10000+Date.now()%800000;
+ await editor.fill(JSON.stringify(spec));await panel.getByRole('button',{name:'Planを事前見積もり',exact:true}).click();
+ await expect(panel.getByLabel('Plan見積もり')).toContainText('96');
+ await panel.getByRole('button',{name:'Draftを保存（実行しない）',exact:true}).click();
+ await expect(panel.getByRole('status').first()).toContainText('Draft');
+ await expect(panel.getByRole('button',{name:'登録Hashで実行開始',exact:true})).toBeDisabled();
+ await panel.getByRole('button',{name:'条件を検証して事前登録',exact:true}).click();
+ await expect(panel.getByRole('status').first()).toContainText('Registered');
+ const registered=await(await request.get(`/api/design/plans/${spec.plan_id}/1`)).json();
+ expect(registered.registered.estimate.distinct_deals).toBe(4);
+ await panel.getByRole('button',{name:'登録Hashで実行開始',exact:true}).click();
+ await expect(panel.getByRole('status').first()).toContainText('Completed',{timeout:30000});
+ await expect(panel).toContainText('判定保留');await expect(panel).toContainText('二重計上しません');
+ const result=await(await request.get(`/api/design/plans/${spec.plan_id}/1/export`)).json();
+ expect(result.analysis.between[0].evidence.independent_deals).toBe(4);expect(result.usage.completed_games).toBe(96);
+ const download=page.waitForEvent('download');await panel.getByRole('button',{name:'Plan結果JSONを保存',exact:true}).click();
+ expect((await download).suggestedFilename()).toContain(spec.plan_id);
+ await panel.getByRole('button',{name:'新しい版のDraft JSONを作る',exact:true}).click();
+ const revised=JSON.parse(await editor.inputValue());expect(revised.version).toBe(2);expect(revised.parent_version).toBe(1);
+ await panel.getByRole('button',{name:'配札数・対局数・時間を見積もる',exact:true}).click();
+ await expect(panel).toContainText('予備評価が必要');
+ await panel.getByRole('button',{name:'固定配分案を計算',exact:true}).click();await expect(panel).toContainText('priority_score');
+ await panel.getByText('予備評価が不足しています。未使用の固定10配札パイロットで分散と時間を再推定してください',{exact:true}).click();
+ await panel.getByRole('button',{name:'提案を新しい版のDraftへ（実行しない）',exact:true}).first().click();
+ await expect(panel.getByRole('status').first()).toContainText('Draft');
+ await page.setViewportSize({width:390,height:844});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+});

@@ -18,7 +18,7 @@ class PlanningInput(BaseModel):
     seconds_per_deal:float|None=Field(default=None,gt=0,le=100000,allow_inf_nan=False)
 
 
-def plan_samples(request):
+def plan_samples(request, *, bound=4):
     r=request;alpha=r.alpha/r.comparisons
     base={'observed_deals':r.observed_deals,'minimum_effect':r.minimum_effect,'adjusted_alpha':alpha,
           'assumptions':'独立・代表的な配札差、将来も同じ分散。両側正規近似による固定標本設計。観測平均を真の効果に使わない。',
@@ -33,7 +33,7 @@ def plan_samples(request):
     total=max(10,ceil(((z.inv_cdf(1-alpha/2)+z.inv_cdf(r.power))*r.sd_difference/r.minimum_effect)**2))
     additional=max(0,total-r.observed_deals)
     # 差は[-4,4]。Hoeffding区間を使う正式な固定標本判定に対応する保守的設計。
-    conservative=ceil(32*(sqrt(log(2/alpha))+sqrt(log(1/(1-r.power))))**2/r.minimum_effect**2)
+    conservative=ceil(2*bound**2*(sqrt(log(2/alpha))+sqrt(log(1/(1-r.power))))**2/r.minimum_effect**2)
     return {**base,'status':'approximate','reason':'観測平均ではなく事前指定した最小改善幅を使用。',
             'estimated_total':total,'estimated_additional':additional,'estimated_seconds':additional*r.seconds_per_deal if r.seconds_per_deal else None,
             'feasible':total<=r.max_deals,'conservative_total':conservative,'conservative_additional':max(0,conservative-r.observed_deals),

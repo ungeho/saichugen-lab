@@ -43,6 +43,9 @@ class EvaluationRequest(BaseModel):
     purpose:Literal['comparison','reserve_ablation','adaptive_ablation']='comparison'
     evolution_id:str|None=None
     evaluation_mode:Literal['fixed']='fixed'
+    deal_layout:Literal['distinct','shared']='distinct'
+    composition_deals:list[int]|None=Field(default=None,min_length=1,max_length=4)
+    family_size:int|None=Field(default=None,strict=True,ge=1,le=100)
 
     @model_validator(mode='after')
     def valid(self):
@@ -50,11 +53,19 @@ class EvaluationRequest(BaseModel):
         if len({o.name for o in self.opponents})!=len(self.opponents) or len({tuple(sorted(o.strategies)) for o in self.opponents})!=len(self.opponents):raise ValueError('相手構成が重複しています')
         if self.weights is not None and (len(self.weights)!=len(self.opponents) or any(not np.isfinite(w) or w<=0 for w in self.weights) or abs(sum(self.weights)-1)>1e-8):raise ValueError('統合重みは構成ごとに正で合計1にしてください')
         if self.purpose!='comparison' and self.participants!=ablation_references(self.purpose):raise ValueError('Ablationは固定した00・10・01・11の4条件が必要です')
+        if self.composition_deals is not None and (len(self.composition_deals)!=len(self.opponents) or any(type(n) is not int or not 1<=n<=20 for n in self.composition_deals)):raise ValueError('構成別配札数は各1〜20件で構成数と一致させてください')
+        if self.weights is not None and len(set(self.counts))!=1:raise ValueError('重み付きブロック統合には同じ配札数が必要です')
+        base=len(self.opponents)*(len(self.participants)-1+(self.purpose!='comparison'))
+        if self.weights is not None:base+=len(self.participants)-1+(self.purpose!='comparison')
+        if self.family_size is not None and self.family_size<base:raise ValueError('多重比較数を実際の比較集合より小さくできません')
         return self
 
+    @property
+    def counts(self):return self.composition_deals or [self.deals]*len(self.opponents)
+
     def plans(self,definitions):
-        plans=[ArenaRequest(participants=self.participants,opponents=o.strategies,deals=self.deals,
-            start_offset=self.start_offset+i*self.deals,seed_partition=self.seed_partition,policy_seed=self.policy_seed,
+        plans=[ArenaRequest(participants=self.participants,opponents=o.strategies,deals=self.counts[i],
+            start_offset=self.start_offset+(0 if self.deal_layout=='shared' else sum(self.counts[:i])),seed_partition=self.seed_partition,policy_seed=self.policy_seed,
             include_expensive=self.include_expensive,timeout_seconds=self.timeout_seconds).resolve(definitions) for i,o in enumerate(self.opponents)]
         estimates=[arena_estimate(p) for p in plans]
         if sum(e['games'] for e in estimates)>360 or sum(e['rollout_upper_bound'] for e in estimates)>250000:raise ValueError('全構成合計で360対局・25万Rollout以内へ分割してください')
@@ -88,8 +99,8 @@ def ablation_references(purpose):return [d.reference for d in ablation_definitio
 
 def estimate_evaluation(request,definitions):
     plans=request.plans(definitions);estimates=[arena_estimate(p) for p in plans]
-    return {'games':sum(e['games'] for e in estimates),'independent_deals_per_composition':request.deals,
-            'distinct_deals':request.deals*len(plans),'rollout_upper_bound':sum(e['rollout_upper_bound'] for e in estimates),
+    return {'games':sum(e['games'] for e in estimates),'independent_deals_per_composition':request.counts,
+            'distinct_deals':max(request.counts) if request.deal_layout=='shared' else sum(request.counts),'rollout_upper_bound':sum(e['rollout_upper_bound'] for e in estimates),
             'estimated_seconds_range':[sum(e['estimated_seconds_range'][i] for e in estimates) for i in (0,1)],
             'note':'相手構成は別々に集計。全6席順は独立標本ではありません。時間は未校正の概算です。'}
 
@@ -99,6 +110,7 @@ def analyze_arena(record,request, *, fixed_complete=False,confirmatory=False):
     clusters=[complete_deals(config,record['results'],s) for s in settings]
     m=len(request.opponents)*(len(settings)-1+(1 if request.purpose!='comparison' else 0))
     if request.weights is not None:m+=len(settings)-1+(1 if request.purpose!='comparison' else 0)
+    m=request.family_size or m
     seconds=record['elapsed_seconds']/len(config.deal_seeds) if config.deal_seeds and record['elapsed_seconds']>0 else None
     comparisons=[];samples=[]
     for i,setting in enumerate(settings[1:],1):
@@ -188,7 +200,7 @@ class EvaluationJobs:
         request=EvaluationRequest.model_validate(payload['config']);reports=[]
         for job in payload['jobs']:
             record=self.arena.get(job['arena_id'],True);index=job['composition']
-            complete=payload['status']=='completed' and record['status']=='completed' and all(s['independent_deals']==request.deals for s in record['summary']['settings'])
+            complete=payload['status']=='completed' and record['status']=='completed' and all(s['independent_deals']==request.counts[index] for s in record['summary']['settings'])
             reports.append({'composition':index,'name':request.opponents[index].name,'arena_id':job['arena_id'],'status':record['status'],
                 'completed_games':record['completed_games'],'elapsed_seconds':record['elapsed_seconds'],'report':analyze_arena(record,request,fixed_complete=complete,confirmatory=request.seed_partition=='validation' and payload['fresh_deals'][index])})
         integrated=None
@@ -214,7 +226,7 @@ class EvaluationJobs:
                 offset=request.start_offset+len(request.opponents)*request.deals+100
                 next_request=request.model_copy(update={'name':request.name[:70]+' / 次の開発パイロット',
                     'opponents':[request.opponents[report['composition']]],'deals':10,'start_offset':offset,
-                    'seed_partition':'development','weights':None,'evolution_id':None})
+                    'seed_partition':'development','weights':None,'evolution_id':None,'composition_deals':None,'family_size':None})
                 if offset<=999900:
                     recommendations[-1]['execution_request']=next_request.model_dump(mode='json')
                     recommendations[-1]['execution_estimated_seconds']=report['report']['seconds_per_deal']*10 if report['report']['seconds_per_deal'] else None

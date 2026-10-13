@@ -1,0 +1,76 @@
+{
+  "plan_id": "adaptive-b-opponent-pilot",
+  "version": 1,
+  "parent_version": null,
+  "created_at": "2026-10-13T12:55:49.395658Z",
+  "reason": "Phase 23の2配札ではB単独変更の効果の符号が相手構成で逆転した。相性差の証拠ではないため追試する。",
+  "hypothesis": "局面切替系B単独変更の効果はRandom/HeuristicとGreedy/ScoreAwareで異なる可能性がある。",
+  "interpretation": "exploratory",
+  "references": [
+    "2169588e-daee-43a1-9d16-405ed8b4eb62"
+  ],
+  "pilot_in_confirmatory": "excluded",
+  "evaluation": {
+    "name": "局面切替B単独・共通配札パイロット",
+    "participants": [
+      "codex_adaptive_theorist@1.0.0",
+      "codex_adaptive_theorist@1.0.21"
+    ],
+    "opponents": [
+      {
+        "name": "Random / Heuristic",
+        "strategies": [
+          "Random",
+          "Heuristic"
+        ]
+      },
+      {
+        "name": "Greedy / ScoreAware",
+        "strategies": [
+          "Greedy",
+          "ScoreAware"
+        ]
+      }
+    ],
+    "deals": 4,
+    "start_offset": 800,
+    "seed_partition": "development",
+    "policy_seed": 42,
+    "include_expensive": false,
+    "timeout_seconds": 180,
+    "alpha": 0.05,
+    "minimum_effect": 0.5,
+    "power": 0.8,
+    "max_deals": 1000,
+    "weights": [
+      0.5,
+      0.5
+    ],
+    "purpose": "comparison",
+    "evolution_id": null,
+    "evaluation_mode": "fixed",
+    "deal_layout": "shared",
+    "composition_deals": null,
+    "family_size": null
+  },
+  "between_opponents": true,
+  "statistics": {
+    "method": "fixed_hoeffding",
+    "correction": "bonferroni",
+    "null": "contrast_mean=0",
+    "alternative": "contrast_mean!=0",
+    "metric": "terminal_reward",
+    "aggregation": "deal_mean_all_6",
+    "stop": "fixed_n_or_budget_or_user_cancel",
+    "time_handling": "diagnostic_and_budget",
+    "decision_threshold": 0.0,
+    "max_decision_time_ratio": 2.0
+  },
+  "budget": {
+    "max_independent_deals": 4,
+    "max_games": 96,
+    "max_rollouts": 0,
+    "allowed_seconds": 60,
+    "measured_seconds_per_deal_composition": null
+  }
+}

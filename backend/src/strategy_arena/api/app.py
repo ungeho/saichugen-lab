@@ -33,6 +33,7 @@ from ..experiments.arena import ArenaPlan,ArenaRequest,arena_jobs,arena_estimate
 from ..experiments.evolution import Evolution, EvolutionRequest, Generation, StageRequest, Adoption, generate
 from ..experiments.evaluation_lab import EvaluationJobs, EvaluationRequest, ablation_definitions, estimate_evaluation, analyze_arena
 from ..experiments.evaluation_statistics import PlanningInput,plan_samples
+from ..experiments.design_lab import DesignLab,PlanSpec,DesignPlanningInput,design_sample_plan,AllocationRequest,allocate,pilot_template
 from ..rule_guide import rule_guide, judge
 from contextlib import asynccontextmanager
 
@@ -106,6 +107,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         yield
         jobs.close()
         quality.close()
+        design.close()
         evaluation.close()
         arena.close()
     app = FastAPI(title="Strategy Arena", lifespan=lifespan)
@@ -117,12 +119,64 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     arena=arena_jobs(store)
     evolution=Evolution(store,definitions,arena)
     evaluation=EvaluationJobs(store,definitions,arena,evolution)
+    design=DesignLab(store,definitions,evaluation,evolution)
 
     def evolution_call(action):
         try:return action()
         except KeyError:raise HTTPException(404,'進化実験がありません') from None
         except ValueError as error:raise HTTPException(422,str(error)) from None
         except RuntimeError as error:raise HTTPException(409,str(error)) from None
+
+    class PlanStart(BaseModel):
+        plan_hash:str=Field(pattern=r'^[a-f0-9]{64}$')
+    class PlanInvalidation(BaseModel):
+        reason:str=Field(min_length=1,max_length=2000)
+    class RecommendedPlan(BaseModel):
+        index:int=Field(default=0,strict=True,ge=0,le=100)
+
+    @app.post('/api/design/template')
+    def design_template():
+        def prepare():
+            for d in ablation_definitions('adaptive_ablation'):definitions.add(d)
+            return pilot_template().model_dump(mode='json')
+        return evolution_call(prepare)
+
+    @app.post('/api/design/planning')
+    def design_planning(request:DesignPlanningInput):return design_sample_plan(request)
+
+    @app.post('/api/design/allocation')
+    def design_allocation(request:AllocationRequest):return evolution_call(lambda:allocate(request))
+
+    @app.post('/api/design/estimate')
+    def design_estimate(request:PlanSpec):return evolution_call(lambda:design.estimate(request))
+
+    @app.get('/api/design/plans')
+    def design_history():return design.history()
+
+    @app.post('/api/design/plans',status_code=201)
+    def design_draft(request:PlanSpec):return evolution_call(lambda:design.draft(request))
+
+    @app.get('/api/design/plans/{identifier}/{version}')
+    @app.get('/api/design/plans/{identifier}/{version}/export')
+    def design_read(identifier:str,version:int):return evolution_call(lambda:design.get(identifier,version))
+
+    @app.post('/api/design/plans/{identifier}/{version}/register')
+    def design_register(identifier:str,version:int):return evolution_call(lambda:design.register(identifier,version))
+
+    @app.post('/api/design/plans/{identifier}/{version}/start',status_code=202)
+    def design_start(identifier:str,version:int,request:PlanStart):return evolution_call(lambda:design.start(identifier,version,request.plan_hash))
+
+    @app.post('/api/design/plans/{identifier}/{version}/cancel')
+    def design_cancel(identifier:str,version:int):return evolution_call(lambda:design.cancel(identifier,version))
+
+    @app.post('/api/design/plans/{identifier}/{version}/invalidate')
+    def design_invalidate(identifier:str,version:int,request:PlanInvalidation):return evolution_call(lambda:design.invalidate(identifier,version,request.reason))
+
+    @app.post('/api/design/plans/{identifier}/{version}/recommendations/draft',status_code=201)
+    def design_plan_recommended(identifier:str,version:int,request:RecommendedPlan):return evolution_call(lambda:design.recommendation_from_plan(identifier,version,request.index))
+
+    @app.post('/api/design/recommendations/{identifier}/draft',status_code=201)
+    def design_recommended(identifier:str,request:RecommendedPlan):return evolution_call(lambda:design.recommended_draft(identifier,request.index))
 
     @app.post('/api/evaluation/planning')
     def evaluation_planning(request:PlanningInput):return plan_samples(request)
