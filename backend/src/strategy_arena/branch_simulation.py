@@ -1,31 +1,14 @@
 """観測だけから共通の世界を生成する分岐実験。"""
 from collections import Counter
-from copy import deepcopy
 from dataclasses import asdict
-from random import Random
 from threading import Event, Lock, Thread
 from time import monotonic
 from uuid import uuid4
 import math
-from .comparison import clone_strategy
 from .experiments.metrics import wilson
-from .experiments.runner import derived_seed
-from .game.engine import Game
-from .game.rewards import REWARD_VERSION, terminal_rewards
-from .inference import UniformSampler
-from .strategies.base import decide
+from .game.rewards import REWARD_VERSION
+from .rollouts import sampled_game, rollout_trial
 from .strategies.registry import create_strategy
-
-def sampled_game(observation, rng):
-    hypothesis = UniformSampler().sample(observation, rng)
-    hands = [hypothesis.hands[p] + tuple(t.cards[p] for t in observation.history) for p in range(3)]
-    game = Game.from_deal(hands, hypothesis.unused)
-    for event in observation.history:
-        if game.play(event.cards) != event:
-            raise ValueError("公開履歴がルールと一致しません")
-    if game.observe(observation.player) != observation:
-        raise ValueError("復元した観測が一致しません")
-    return game
 
 def aggregate(card, outcomes):
     scores = [row["score"] for row in outcomes]
@@ -63,36 +46,8 @@ def simulate(observation, position, cards, names, trials, seed, check=lambda: No
     outcomes = [[] for _ in cards]
     for trial in range(trials):
         check()
-        base = sampled_game(observation, Random(derived_seed(seed, f"branch-world:{trial}")))
-        rng_states = [Random(derived_seed(seed, f"branch-policy:{trial}:{p}:{names[p]}:{versions[p]}")).getstate() for p in range(3)]
-        for index, card in enumerate(cards):
-            check()
-            game = deepcopy(base)
-            policies = [clone_strategy(s) for s in templates]
-            rngs = [Random() for _ in range(3)]
-            for rng, state in zip(rngs, rng_states):
-                rng.setstate(state)
-            first = True
-            while not game.finished:
-                check()
-                observations = [game.observe(p) for p in range(3)]
-                actions = []
-                for p in range(3):
-                    actions.append(card if first and p == observation.player else decide(policies[p], observations[p], rngs[p], False).card)
-                    check()
-                game.play(tuple(actions))
-                first = False
-            scores = game.observe(observation.player).game_scores
-            score = scores[observation.player]
-            best = 1 + sum(s > score for s in scores)
-            worst = 3 - sum(s < score for s in scores)
-            rank = str(best) if best == worst else f"{best}–{worst}"
-            winners = game.winners
-            won = observation.player in winners
-            outcomes[index].append({"score": score, "win": int(won), "rank": rank,
-                                    "sole_win": int(won and len(winners) == 1),
-                                    "joint_win": int(won and len(winners) > 1),
-                                    "reward": terminal_rewards(winners)[observation.player]})
+        for index, row in enumerate(rollout_trial(observation, cards, templates, seed, trial, check, names)):
+            outcomes[index].append(row)
         progress(trial + 1)
     paired = []
     for i in range(len(cards)):
@@ -105,7 +60,7 @@ def simulate(observation, position, cards, names, trials, seed, check=lambda: No
                            "ci95": [max(-1, mean - 1.96 * se), min(1, mean + 1.96 * se)] if se is not None else None,
                            "average_score_difference": sum(a["score"] - b["score"] for a, b in zip(outcomes[i], outcomes[j])) / trials})
     return {"schema_version": 2, "reward_version": REWARD_VERSION, "position": position, "seed": seed, "trials": trials,
-            "continuation": [{"name": name, "version": version} for name, version in zip(names, versions)],
+            "continuation": [{"name": name, "version": version, **({"parameters": s.parameters} if hasattr(s, "parameters") else {})} for name, version, s in zip(names, versions, templates)],
             "state_policy": "registered_initial_v1", "sampler": "uniform-unseen-v1", "information_condition": "imperfect",
             "sampling_note": "自分の手札と公開履歴を固定し、未公開カードを残り枚数に従って一様に配分。過去の選択傾向による重み付けは行いません。",
             "continuation_note": "全席の継続戦略は登録時の初期状態を複製。対象席の最初の一手だけを強制し、その手番では対象戦略を呼びません。",

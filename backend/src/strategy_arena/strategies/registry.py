@@ -36,3 +36,18 @@ def algorithm_catalog() -> list[dict]:
              "description_available": name in _descriptions,
              "description_origin": "実装コードに基づく図鑑用の解説（判断ログではありません）",
              **asdict(_descriptions.get(name, AlgorithmDescription()))} for name in strategy_names()]
+
+
+def configured_parameters(names) -> dict:
+    """設定を持つ戦略だけ記録し、既存戦略の空設定との互換性を保つ。"""
+    parameters = {}
+    for name in dict.fromkeys(names):
+        values = getattr(create_strategy(name), "parameters", None)
+        if values is not None:
+            parameters[name] = values
+    return parameters
+
+
+from .monte_carlo import MonteCarloRollout, DESCRIPTION
+
+register(MonteCarloRollout.name, MonteCarloRollout, DESCRIPTION)

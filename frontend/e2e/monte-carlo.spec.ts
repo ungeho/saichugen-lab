@@ -1,0 +1,32 @@
+import {test,expect} from '@playwright/test';
+
+test('Rolloutを選択して対局・比較・実験・図鑑を使える',async({page})=>{
+ const name='monte_carlo_rollout';
+ await page.goto('/');
+ await page.getByRole('combobox',{name:'プレイヤー 1',exact:true}).selectOption(name);
+ await page.getByRole('button',{name:'新しいゲーム',exact:true}).click();
+ await page.getByRole('button',{name:'AIで1ターン進む',exact:true}).click();
+ const inspector=page.getByRole('region',{name:'判断過程の詳細',exact:true});
+ await expect(inspector.getByRole('region',{name:'Rolloutの探索条件'})).toContainText('共通試行 8 / 8');
+ await expect(inspector).toContainText('期待終局報酬');
+ await expect(inspector.locator('.candidate-table tbody tr')).toHaveCount(17);
+ await page.getByRole('button',{name:'同じ局面でAIを比較',exact:true}).click();
+ const comparison=page.getByRole('region',{name:'同一局面のアルゴリズム比較',exact:true});
+ await comparison.getByRole('checkbox',{name:new RegExp(name)}).check();
+ await comparison.getByRole('button',{name:'この局面で比較する',exact:true}).click();
+ await expect(comparison.getByRole('article',{name:name+'の比較結果'})).toBeVisible();
+ const result=comparison.getByRole('article',{name:name+'の比較結果'});
+ await result.getByText(name+'の候補評価・計算内訳を開く',{exact:true}).click();
+ await expect(result.getByRole('region',{name:'Rolloutの探索条件'})).toContainText('探索seed');
+ await page.getByRole('button',{name:'比較実験',exact:true}).click();
+ await page.getByLabel('独立配札数').fill('1');
+ await page.getByRole('button',{name:'比較実験を実行',exact:true}).click();
+ await expect(page.locator('.metrics')).toContainText(name);
+ await expect(page.locator('.metrics')).toContainText('平均終局報酬');
+ await page.getByRole('button',{name:'アルゴリズム図鑑',exact:true}).click();
+ await page.getByRole('region',{name:'登録アルゴリズム'}).getByRole('button',{name:new RegExp(name)}).click();
+ await expect(page.locator('.catalog-detail')).toContainText('MCTS');
+ await expect(page.locator('.catalog-detail')).toContainText('1〜64');
+ await page.setViewportSize({width:390,height:844});
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+});

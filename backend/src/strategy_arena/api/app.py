@@ -17,7 +17,7 @@ from ..game.engine import Game
 from ..game.rules import RULE_VERSION
 from ..game.rewards import REWARD_VERSION, terminal_rewards
 from ..experiments.evaluation import enrich_payload
-from ..strategies.registry import create_strategy, strategy_names
+from ..strategies.registry import create_strategy, strategy_names, configured_parameters
 from ..strategies.registry import algorithm_catalog
 from ..strategies.base import Decision, decide, decision_record
 from ..experiments.catalog_statistics import algorithm_statistics
@@ -267,7 +267,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         payload = {"config": config.model_dump(), "rule_version": RULE_VERSION,
                    "strategy_versions": {name: create_strategy(name).version for name in config.strategies},
                    "information_condition": config.information_condition,
-                   "strategy_parameters": {},
+                   "strategy_parameters": configured_parameters(config.strategies),
                    "python": platform.python_version(), "results": results, "summary": summarize(results),
                    "reward_version": REWARD_VERSION, "result_schema_version": 2}
         payload = enrich_payload(payload)

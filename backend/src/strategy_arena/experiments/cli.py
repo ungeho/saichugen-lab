@@ -9,7 +9,7 @@ from .runner import run_experiment
 from .metrics import summarize
 from ..game.rules import RULE_VERSION
 from ..game.rewards import REWARD_VERSION
-from ..strategies.registry import create_strategy, strategy_names
+from ..strategies.registry import create_strategy, strategy_names, configured_parameters
 
 
 def main():
@@ -27,7 +27,7 @@ def main():
     payload = {"rule_version": RULE_VERSION, "information_condition": "imperfect",
                "reward_version": REWARD_VERSION, "result_schema_version": 2,
                "config": {"seed": args.seed, "deals": args.deals, "strategies": args.strategies, "rotate": True, "capture_details": args.capture_details},
-               "strategy_parameters": {},
+               "strategy_parameters": configured_parameters(args.strategies),
                "strategy_versions": {name: create_strategy(name).version for name in args.strategies},
                "results": results, "summary": summarize(results)}
     args.output.parent.mkdir(parents=True, exist_ok=True)
