@@ -30,6 +30,7 @@ from ..strategies.theories import TheoryConfig, theory_catalog
 from ..strategies.theory_policy import TheoryPolicy
 from ..strategies.declarative import DefinitionStore,StrategyDefinition
 from ..experiments.arena import ArenaRequest,arena_jobs,arena_estimate,compare_arena,KIND as ARENA_KIND
+from ..experiments.evolution import Evolution, EvolutionRequest, Generation, StageRequest, Adoption, generate
 from ..rule_guide import rule_guide, judge
 from contextlib import asynccontextmanager
 
@@ -111,6 +112,41 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     quality = QualityJobs(store)
     definitions=DefinitionStore(database)
     arena=arena_jobs(store)
+    evolution=Evolution(store,definitions,arena)
+
+    def evolution_call(action):
+        try:return action()
+        except KeyError:raise HTTPException(404,'進化実験がありません') from None
+        except ValueError as error:raise HTTPException(422,str(error)) from None
+        except RuntimeError as error:raise HTTPException(409,str(error)) from None
+
+    @app.post('/api/evolution/generate')
+    def evolution_generate(request:Generation):
+        return evolution_call(lambda:{'candidates':[d.model_dump(mode='json') for d in generate(definitions.get(request.parent),request)],'registered':False})
+
+    @app.post('/api/evolution/import',status_code=201)
+    def evolution_import(request:StrategyDefinition):
+        return evolution_call(lambda:definitions.add(request).model_dump(mode='json'))
+
+    @app.get('/api/evolution/experiments')
+    def evolution_history():return evolution.history()
+
+    @app.post('/api/evolution/experiments',status_code=201)
+    def evolution_create(request:EvolutionRequest):return evolution_call(lambda:evolution.create(request))
+
+    @app.get('/api/evolution/experiments/{identifier}')
+    @app.get('/api/evolution/experiments/{identifier}/export')
+    def evolution_read(identifier:str):return evolution_call(lambda:evolution.get(identifier))
+
+    @app.post('/api/evolution/experiments/{identifier}/stages/{stage}',status_code=202)
+    def evolution_start(identifier:str,stage:Literal['development','validation','final'],request:StageRequest):
+        return evolution_call(lambda:evolution.start(identifier,stage,request))
+
+    @app.post('/api/evolution/experiments/{identifier}/decision')
+    def evolution_decide(identifier:str,request:Adoption):return evolution_call(lambda:evolution.decide(identifier,request))
+
+    @app.get('/api/evolution/experiments/{identifier}/proposal')
+    def evolution_proposal(identifier:str):return evolution_call(lambda:evolution.proposal(identifier))
 
     @app.get('/api/arena/strategies')
     def arena_strategies():

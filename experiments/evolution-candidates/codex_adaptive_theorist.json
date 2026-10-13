@@ -1,0 +1,130 @@
+{
+  "definition": {
+    "schema_version": 1,
+    "id": "codex_adaptive_theorist",
+    "name": "Codex / 局面切替の重みを緩和",
+    "version": "1.0.10",
+    "creator": "Codex / Phase22",
+    "description": "Phase 22の事前登録した改良仮説。強さは未確認。",
+    "hypothesis": "序盤の中程度温存と得点上位時の累計逆算の極端な重みを緩めると、現在ラウンドの調整との両立が改善するか。",
+    "rationale": "Phase 21の開発と検証で成績が変動。既存規則の極端な重みが順位調整を阻害する可能性を事前仮説として検証する。",
+    "expected_strengths": [
+      "目前の順位調整と将来の選択肢の両立を期待。未検証。"
+    ],
+    "expected_weaknesses": [
+      "序盤の選択肢温存と累計上位からの回避が弱くなる可能性。複数項変更のため各項の因果寄与は分離できない。"
+    ],
+    "difference_from_existing": "上位時と序盤の重みを緩和、ラウンド調整を強化",
+    "theory_config": {
+      "theories": [
+        {
+          "id": "cumulative_target",
+          "version": "1",
+          "enabled": true,
+          "weight": 0.5,
+          "params": {}
+        },
+        {
+          "id": "reserve_middle",
+          "version": "1",
+          "enabled": true,
+          "weight": 0.5,
+          "params": {
+            "mode": "preserve",
+            "center": 7.0,
+            "width": 2.0
+          }
+        },
+        {
+          "id": "round_focus",
+          "version": "1",
+          "enabled": true,
+          "weight": 0.5,
+          "params": {
+            "mode": "round"
+          }
+        }
+      ],
+      "tie_break": "seeded_random"
+    },
+    "rules": [
+      {
+        "phase": "any",
+        "score_position": "high",
+        "round_min": 1,
+        "round_max": 5,
+        "weights": {
+          "cumulative_target": 1.0,
+          "round_focus": 0.75,
+          "reserve_middle": 0.1
+        },
+        "explanation": "単独最高累計なら距離を優先"
+      },
+      {
+        "phase": "early",
+        "score_position": "any",
+        "round_min": 1,
+        "round_max": 5,
+        "weights": {
+          "reserve_middle": 0.6,
+          "round_focus": 0.6,
+          "cumulative_target": 0.1
+        },
+        "explanation": "序盤は選択肢を温存"
+      },
+      {
+        "phase": "late",
+        "score_position": "any",
+        "round_min": 1,
+        "round_max": 5,
+        "weights": {
+          "reserve_middle": 0.1,
+          "round_focus": 0.7,
+          "cumulative_target": 1.2
+        },
+        "explanation": "終盤は得点調整"
+      }
+    ],
+    "selection": "theory",
+    "total_budget": null,
+    "continuation": "Random",
+    "seed_mode": "evaluator_rng",
+    "fixed_policy_seed": null,
+    "parent": {
+      "id": "codex_adaptive_theorist",
+      "version": "1.0.0",
+      "definition_hash": "0ab5f2ffbe07c9dba927a4093e9e4eb8bb7691209f1c90d794e11d984b953693"
+    },
+    "change_summary": "上位時と序盤の重みを緩和、ラウンド調整を強化",
+    "change_reason": "Phase 21の開発と検証で成績が変動。既存規則の極端な重みが順位調整を阻害する可能性を事前仮説として検証する。",
+    "created_at": "2026-10-13T11:21:16.697557Z",
+    "definition_hash": "bd5b7295324eb472c5741c15fb101487e7cf93fbc856c23c750e8243178df1f1"
+  },
+  "experiment": {
+    "name": "codex_adaptive_theorist / Phase22事前仮説",
+    "parent": "codex_adaptive_theorist@1.0.0",
+    "children": [
+      "codex_adaptive_theorist@1.0.10"
+    ],
+    "opponents": [
+      "Random",
+      "Heuristic"
+    ],
+    "deals": 2,
+    "development_offset": 400,
+    "validation_offset": 400,
+    "final_offset": 400,
+    "policy_seed": 42,
+    "include_expensive": false,
+    "timeout_seconds": 180,
+    "criteria": {
+      "min_deals": 10,
+      "min_difference": 0.0,
+      "max_time_ratio": 2.0,
+      "min_opponent_compositions": 1
+    },
+    "hypothesis": "序盤の中程度温存と得点上位時の累計逆算の極端な重みを緩めると、現在ラウンドの調整との両立が改善するか。",
+    "expected_effect": "同じ相手Random/Heuristicに対する平均終局報酬の改善。改善しない可能性も含めて記録する。",
+    "side_effects": "序盤の選択肢温存と累計上位からの回避が弱くなる可能性。複数項変更のため各項の因果寄与は分離できない。"
+  }
+}

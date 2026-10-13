@@ -1,0 +1,96 @@
+{
+  "definition": {
+    "schema_version": 1,
+    "id": "codex_reserve",
+    "name": "Codex / 温存と現在ラウンドの再配分",
+    "version": "1.0.10",
+    "creator": "Codex / Phase22",
+    "description": "Phase 22の事前登録した改良仮説。強さは未確認。",
+    "hypothesis": "温存の重みを下げ現在ラウンドの重みを上げると、目前の順位調整の取り逃しが減り終局報酬が改善するか。",
+    "rationale": "Phase 21の開発2配札で平均報酬−.833だったが少数であり弱さは未確定。温存が目前の調整を妨げる可能性を検証する。",
+    "expected_strengths": [
+      "目前の順位調整と将来の選択肢の両立を期待。未検証。"
+    ],
+    "expected_weaknesses": [
+      "強い札と中程度の札を早く消費し、後半の調整余地が減る可能性。"
+    ],
+    "difference_from_existing": "温存重みを半減、ラウンドを.25から.75へ",
+    "theory_config": {
+      "theories": [
+        {
+          "id": "reserve_middle",
+          "version": "1",
+          "enabled": true,
+          "weight": 0.5,
+          "params": {
+            "mode": "preserve",
+            "center": 7.0,
+            "width": 2.0
+          }
+        },
+        {
+          "id": "reserve_strong",
+          "version": "1",
+          "enabled": true,
+          "weight": 0.3,
+          "params": {
+            "mode": "preserve",
+            "threshold": 10.0
+          }
+        },
+        {
+          "id": "round_focus",
+          "version": "1",
+          "enabled": true,
+          "weight": 0.75,
+          "params": {
+            "mode": "round"
+          }
+        }
+      ],
+      "tie_break": "seeded_random"
+    },
+    "rules": [],
+    "selection": "theory",
+    "total_budget": null,
+    "continuation": "Random",
+    "seed_mode": "evaluator_rng",
+    "fixed_policy_seed": null,
+    "parent": {
+      "id": "codex_reserve",
+      "version": "1.0.0",
+      "definition_hash": "fd13117fcfa26a3bea187f125e3536c5cb471073baee9933f17b1e46df84cc68"
+    },
+    "change_summary": "温存重みを半減、ラウンドを.25から.75へ",
+    "change_reason": "Phase 21の開発2配札で平均報酬−.833だったが少数であり弱さは未確定。温存が目前の調整を妨げる可能性を検証する。",
+    "created_at": "2026-10-13T11:21:16.694438Z",
+    "definition_hash": "b7120f75731655961b8644f45494a8bfd57b998a23381627b28aaf704142a0f5"
+  },
+  "experiment": {
+    "name": "codex_reserve / Phase22事前仮説",
+    "parent": "codex_reserve@1.0.0",
+    "children": [
+      "codex_reserve@1.0.10"
+    ],
+    "opponents": [
+      "Random",
+      "Heuristic"
+    ],
+    "deals": 2,
+    "development_offset": 400,
+    "validation_offset": 400,
+    "final_offset": 400,
+    "policy_seed": 42,
+    "include_expensive": false,
+    "timeout_seconds": 180,
+    "criteria": {
+      "min_deals": 10,
+      "min_difference": 0.0,
+      "max_time_ratio": 2.0,
+      "min_opponent_compositions": 1
+    },
+    "hypothesis": "温存の重みを下げ現在ラウンドの重みを上げると、目前の順位調整の取り逃しが減り終局報酬が改善するか。",
+    "expected_effect": "同じ相手Random/Heuristicに対する平均終局報酬の改善。改善しない可能性も含めて記録する。",
+    "side_effects": "強い札と中程度の札を早く消費し、後半の調整余地が減る可能性。"
+  }
+}
