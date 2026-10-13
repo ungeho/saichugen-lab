@@ -1,0 +1,16 @@
+__pycache__/
+.pytest_cache/
+.venv/
+node_modules/
+dist/
+*.sqlite3
+artifacts/
+.tools/
+.uv-cache/
+.pnpm-store/
+.test-tmp/
+.test-tmp-api/
+.test-tmp-final/
+test-results/
+playwright-report/
+*.tsbuildinfo
