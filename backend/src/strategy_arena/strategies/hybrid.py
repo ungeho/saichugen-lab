@@ -22,7 +22,7 @@ class HybridSearch:
     version = "1"
 
     def __init__(self, method="uniform", total_budget=64, continuation="Random", seed=None,
-                 time_limit_ms=None, min_trials=1):
+                 time_limit_ms=None, min_trials=1, priority_evaluator=None):
         if method not in METHOD_NAMES:
             raise ValueError("未知の総予算探索方式")
         if type(total_budget) is not int or not 1 <= total_budget <= MAX_TOTAL_BUDGET:
@@ -39,11 +39,15 @@ class HybridSearch:
         self.method, self.total_budget, self.continuation = method, total_budget, continuation
         self.seed, self.time_limit_ms, self.min_trials = seed, time_limit_ms, min_trials
         self.name = METHOD_NAMES[method]
+        if priority_evaluator is not None and (method not in ('heuristic','combined') or not callable(getattr(priority_evaluator,'evaluate',None))):
+            raise ValueError("優先評価器はHeuristic優先・組み合わせ方式にだけ注入できます")
+        self.priority_evaluator=priority_evaluator
 
     @property
     def parameters(self):
         return {"method":self.method,"total_budget":self.total_budget,"continuation":self.continuation,
-                "seed":self.seed,"time_limit_ms":self.time_limit_ms,"min_trials":self.min_trials}
+                "seed":self.seed,"time_limit_ms":self.time_limit_ms,"min_trials":self.min_trials,
+                **({'priority_source':self.priority_evaluator.parameters} if self.priority_evaluator is not None else {})}
 
     def choose(self, observation, rng):
         return self._choose(observation,rng,False)
@@ -62,6 +66,7 @@ class HybridSearch:
         counts = {"started":0,"finished":0}
         heuristic_ns = allocation_ns = 0
         heuristic = {}
+        priority_details = None
         timed_out = False
         fallback = None
         priority = cards
@@ -81,8 +86,13 @@ class HybridSearch:
                 if self.method in ("heuristic","combined"):
                     clock=perf_counter_ns()
                     try:
-                        detail=Baseline("Heuristic").choose_detailed(observation,Random(0)).details
-                        heuristic={c.card:c.score for c in detail.candidates}
+                        if self.priority_evaluator is None:
+                            detail=Baseline("Heuristic").choose_detailed(observation,Random(0)).details
+                            heuristic={c.card:c.score for c in detail.candidates}
+                        else:
+                            heuristic,priority_details=self.priority_evaluator.evaluate(observation)
+                            if set(heuristic)!=set(cards) or any(not isfinite(v) for v in heuristic.values()):
+                                raise ValueError("優先評価器は全合法手の有限値を返す必要があります")
                         priority=tuple(sorted(cards,key=lambda c:(-heuristic[c],c)))
                     finally:
                         heuristic_ns=perf_counter_ns()-clock
@@ -141,9 +151,9 @@ class HybridSearch:
             details=DecisionDetails(
                 candidates=tuple(CandidateEvaluation(c,means.get(c),
                     f"{len(outcomes[c])}試行。終局報酬平均で比較。適応配分の選択バイアスを含むため候補区間は未提供。" if outcomes[c] else "未評価。評価値は付けません。",
-                    {"trials":len(outcomes[c]),**({"heuristic_priority_score":heuristic[c]} if c in heuristic else {})}) for c in cards),
+                    {"trials":len(outcomes[c]),**({("theory_priority_score" if self.priority_evaluator is not None else "heuristic_priority_score"):heuristic[c]} if c in heuristic else {})}) for c in cards),
                 reasoning=(f"方式{self.method}。全候補を最低{self.min_trials}回評価し、残り予算を配分。",explanation,
-                           "Heuristic/UCB値は配分にだけ利用。最終選択には終局報酬平均だけを使います。"),
+                           ("Theory" if self.priority_evaluator is not None else "Heuristic")+"/UCB値は配分にだけ利用。最終選択には終局報酬平均だけを使います。"),
                 score_label="期待終局報酬（仮想対局の標本平均、−2〜+2）",
                 information_used=("本人の手札と合法手","公開履歴・得点・ターン・残り枚数"),
                 estimates=("一様な未知札サンプリング。実際の相手手札は使いません。",
@@ -156,7 +166,8 @@ class HybridSearch:
                     "heuristic_ms":heuristic_ns/1e6,"allocation_ms":allocation_ns/1e6,
                     "elapsed_ms":(perf_counter_ns()-started)/1e6,"sampler":"uniform-unseen-v1",
                     "best_runner_up_mean_gap":means[ranked[0]]-means[ranked[1]] if len(ranked)>1 else None,
-                    "gap_note":"対応差の信頼区間ではありません。候補ごとの標本数が異なり得ます。"})
+                    "gap_note":"対応差の信頼区間ではありません。候補ごとの標本数が異なり得ます。",
+                    **({'priority_evaluations':priority_details,'priority_source':self.priority_evaluator.parameters} if self.priority_evaluator is not None else {})})
         return Decision(chosen,explanation=explanation,details=details)
 
 

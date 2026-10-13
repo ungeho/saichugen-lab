@@ -38,6 +38,9 @@ def resource_plan(config, historical=()):
         if times:
             per_game = mean(times)
             sources.append({"setting":setting.identifier,"source":"同CPU・同相手・同設定・同実装の完了対局", "samples":len(times),"game_seconds":per_game})
+        elif setting.budget_family=='direct':
+            per_game=.05
+            sources.append({'setting':setting.identifier,'source':'直接評価の未校正参考値。先に少数配札で測定してください','samples':0,'game_seconds':per_game})
         elif setting.continuation in REFERENCE_SECONDS_8 and setting.time_limit_ms is None:
             per_game = REFERENCE_SECONDS_8[setting.continuation]*(setting.trials/8 if setting.method=="legacy" else setting.total_budget*15/1200)
             sources.append({"setting":setting.identifier,"source":"Phase17参考値のRollout数比例モデル。Hybridの追加処理・再サンプル費用は未校正", "samples":0,"game_seconds":per_game})

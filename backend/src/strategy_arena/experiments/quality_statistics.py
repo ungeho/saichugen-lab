@@ -56,10 +56,10 @@ def complete_deals(config, rows, setting):
 
 
 def paired_clusters(first, second, first_setting, second_setting, seed):
-    if ((first_setting.method=="legacy") != (second_setting.method=="legacy")
+    if (first_setting.budget_family != second_setting.budget_family
             or first_setting.total_budget != second_setting.total_budget
             or first_setting.min_trials != second_setting.min_trials
-            or (first_setting.method!="legacy" and first_setting.continuation!=second_setting.continuation)):
+            or (first_setting.budget_family=='budget' and first_setting.continuation!=second_setting.continuation)):
         return {"comparable":False,"reasons":["総予算・最低試行・予算方式・継続条件が一致しません。"],
                 "difference":None,"ci95":None,"independent_deals":0,"matched_deals":[]}
     if first_setting.time_limit_ms != second_setting.time_limit_ms:
@@ -101,6 +101,7 @@ def compare_saved(first, second, first_name, second_name):
     reasons = []
     for name,x,y in [("対戦相手",a.opponents,b.opponents),("方策seed",a.policy_seed,b.policy_seed),
                      ("基準コミット",a.baseline_commit,b.baseline_commit),
+                     ("seed用途区分",a.seed_partition,b.seed_partition),
                      ("ルール",first.get("rule_version"),second.get("rule_version")),
                      ("報酬版",first.get("reward_version"),second.get("reward_version")),
                      ("情報条件",first.get("information_condition","imperfect"),second.get("information_condition","imperfect")),
@@ -108,8 +109,10 @@ def compare_saved(first, second, first_name, second_name):
         if x != y or x is None: reasons.append(name+"が一致しません。")
     sources_a,sources_b=decision_sources(first),decision_sources(second)
     required={"game/engine.py","game/rules.py","strategies/monte_carlo.py","strategies/baselines.py","rollouts.py","inference.py","experiments/runner.py","experiments/rollout_quality.py"}
-    if left.method!="legacy" or right.method!="legacy":
+    if left.budget_family=='budget' or right.budget_family=='budget':
         required.update(("strategies/hybrid.py","strategies/registry.py"))
+    if left.method.startswith('theory') or right.method.startswith('theory'):
+        required.update(('strategies/theories.py','strategies/theory_policy.py','strategies/registry.py'))
     if not required <= sources_a.keys() or not required <= sources_b.keys() or sources_a != sources_b:
         reasons.append("対局・戦略ソースのfingerprintが一致しないか未記録です。")
     context = {"first_opponents": a.opponents, "second_opponents": b.opponents,

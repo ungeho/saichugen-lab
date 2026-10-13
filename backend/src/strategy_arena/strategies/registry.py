@@ -56,3 +56,9 @@ from .hybrid import HybridSearch, METHOD_NAMES, description
 
 for method, name in METHOD_NAMES.items():
     register(name, lambda m=method: HybridSearch(m), description(method))
+
+from .theory_policy import TheoryPolicy, TheorySearch, description as theory_description
+
+register('theory_policy',TheoryPolicy,theory_description())
+register('theory_search',TheorySearch,theory_description(True))
+register('theory_search_adaptive',lambda:TheorySearch(adaptive=True),theory_description(True))

@@ -5,6 +5,7 @@ from time import monotonic
 from .rollout_quality import KIND, StudyConfig, estimate, runtime_info, run_study, probe, summarize_study
 from ..game.rules import RULE_VERSION
 from ..game.rewards import REWARD_VERSION
+from ..strategies.theories import theory_catalog
 
 
 class StudyStopped(Exception):
@@ -31,6 +32,11 @@ class QualityJobs:
                        "runtime": runtime_info(), "estimate": estimate(config,[p for i,p in self.store.iter_experiments()]), "results": [], "positions": [], "partial_games": [],
                        "information_condition":"imperfect", "runner_seed_scheme":"quality-policy-v1",
                        "statistics_version":"deal-cluster-v2",
+                       "strategy_manifest":[{'setting':s.identifier,'strategy_id':s.strategy_name,'strategy_version':'1',
+                           'parameters':s.model_dump(),'theories':s.theory_config.model_dump() if s.theory_config else None,
+                           'parent_strategy':'HybridSearch' if s.method.startswith('theory_search') else None,
+                           'hypothesis_status':'未検証' if s.method.startswith('theory') else '比較対象'} for s in config.settings],
+                       "theory_manifest":[d for d in theory_catalog() if any(s.theory_config and any(t.id==d['id'] for t in s.theory_config.theories) for s in config.settings)],
                        "elapsed_seconds": 0, "error": None}
             identifier = self.store.save(payload)
             self.active = identifier

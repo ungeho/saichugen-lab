@@ -1,0 +1,50 @@
+import {test,expect} from '@playwright/test';
+
+test('Theoryの単独寄与・組み合わせ・実験保存と再表示',async({page})=>{
+ await page.goto('/');await page.getByRole('button',{name:'Theory Lab',exact:true}).click();
+ const lab=page.getByRole('region',{name:'戦術仮説研究室'});
+ await expect(lab.getByRole('checkbox')).toHaveCount(6);
+ await expect(lab).toContainText('すべて未検証');
+ await lab.getByLabel('中程度のカードの温存を有効').check();
+ await lab.getByRole('button',{name:'この設定の評価を見る',exact:true}).click();
+ await expect(lab.getByRole('region',{name:'Theoryごとの評価寄与'}).first()).toContainText('期待終局報酬ではありません');
+ await lab.getByText('仮説別の評価値・重み・寄与',{exact:true}).first().click();
+ await expect(lab.getByRole('region',{name:'Theoryごとの評価寄与'}).first().locator('tbody tr')).toHaveCount(102);
+ await lab.getByLabel('Theory実験の独立配札数').fill('1');
+ await lab.getByRole('button',{name:'この仮説から実験計画を作る',exact:true}).click();
+ const quality=lab.getByRole('region',{name:'Rolloutの探索品質評価'});
+ await expect(quality.getByLabel('探索品質実験の設定JSON')).toHaveValue(/Theory Lab/);
+ await quality.getByRole('button',{name:'実験規模を見積もる',exact:true}).click();
+ await expect(quality.getByRole('status')).toContainText('予定 30対局');
+ const response=page.waitForResponse(r=>r.url().endsWith('/api/quality-studies')&&r.request().method()==='POST');
+ await quality.getByRole('button',{name:'この計画で実行',exact:true}).click();
+ const {id}=await(await response).json();
+ await expect(quality.getByRole('status').filter({hasText:'完了'})).toContainText('30 / 30');
+ await expect(quality).toContainText('10件未満のため区間を表示しません');
+ await quality.getByText('ラウンド・局面・手札構成別の判断傾向',{exact:true}).click();
+ await expect(quality).toContainText('判断件数は独立配札数ではありません');
+ const downloaded=page.waitForEvent('download');await quality.getByRole('button',{name:'結果JSONを保存',exact:true}).click();
+ expect((await downloaded).suggestedFilename()).toBe('rollout-quality-'+id+'.json');
+ await page.reload();await page.getByRole('button',{name:'Theory Lab',exact:true}).click();
+ await quality.getByLabel('保存済み探索品質実験').selectOption(id);
+ await expect(quality.getByRole('status').filter({hasText:'完了'})).toContainText('30 / 30');
+ await page.setViewportSize({width:390,height:844});
+ await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+});
+
+test('Theory戦略を対局で使い、不正な設定を表示する',async({page})=>{
+ await page.goto('/');await page.getByRole('combobox',{name:'プレイヤー 1',exact:true}).selectOption('theory_search_adaptive');
+ await page.getByRole('button',{name:'新しいゲーム',exact:true}).click();
+ await page.getByRole('button',{name:'AIで1ターン進む',exact:true}).click();
+ const inspector=page.getByRole('region',{name:'判断過程の詳細'});
+ await expect(inspector.getByRole('region',{name:'Hybrid探索の予算と配分'})).toContainText('総予算 64 / 開始 64');
+ await expect(inspector.getByRole('region',{name:'Theoryごとの評価寄与'})).toBeVisible();
+ await page.getByRole('button',{name:'Theory Lab',exact:true}).click();
+ const lab=page.getByRole('region',{name:'戦術仮説研究室'});
+ await lab.getByLabel('強いカードの温存の重み').fill('3');
+ await lab.getByRole('button',{name:'この設定の評価を見る',exact:true}).click();
+ await expect(lab.getByRole('alert')).toContainText('422');
+ await lab.getByLabel('強いカードの温存の重み').fill('1');
+ await lab.getByLabel('seedの用途').selectOption('validation');
+ await expect(lab.getByLabel('開始seed')).toHaveValue('1000100');
+});

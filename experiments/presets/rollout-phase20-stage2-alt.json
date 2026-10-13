@@ -1,0 +1,79 @@
+{
+  "baseline_commit": "e12a27e40233e13a2d5faaae8776bb3e790359d5",
+  "policy_seed": 42,
+  "seed_partition": "development",
+  "opponents": [
+    "Greedy",
+    "ScoreAware"
+  ],
+  "analyze_position": true,
+  "timeout_seconds": 120,
+  "name": "Theory Stage2 / GreedyとScoreAware",
+  "deal_seeds": [
+    200,
+    201
+  ],
+  "settings": [
+    {
+      "method": "theory",
+      "theory_config": {
+        "theories": []
+      }
+    },
+    {
+      "method": "theory",
+      "theory_config": {
+        "theories": [
+          {
+            "id": "reserve_middle",
+            "enabled": true,
+            "params": {}
+          }
+        ]
+      }
+    },
+    {
+      "method": "theory",
+      "theory_config": {
+        "theories": [
+          {
+            "id": "public_memory",
+            "enabled": true,
+            "params": {}
+          }
+        ]
+      }
+    },
+    {
+      "method": "theory",
+      "theory_config": {
+        "theories": [
+          {
+            "id": "public_memory",
+            "enabled": true,
+            "params": {
+              "public": false
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "theory",
+      "theory_config": {
+        "theories": [
+          {
+            "id": "reserve_middle"
+          },
+          {
+            "id": "public_memory"
+          }
+        ]
+      }
+    },
+    {
+      "method": "baseline",
+      "baseline_name": "ScoreAware"
+    }
+  ]
+}

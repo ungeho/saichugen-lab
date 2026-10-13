@@ -23,8 +23,11 @@ from ..strategies.base import Decision
 from ..strategies.baselines import NAMES, Baseline
 from ..strategies.monte_carlo import MonteCarloRollout
 from ..strategies.hybrid import HybridSearch, METHOD_NAMES
+from ..strategies.theory_policy import TheoryPolicy, TheorySearch
+from ..strategies.theories import TheoryConfig
 
-BASELINE_COMMIT = "0216601af12936805af91a8dccf11a45c5d36f1d"
+BASELINE_COMMIT = "e12a27e40233e13a2d5faaae8776bb3e790359d5"
+PHASE18_BASELINE = "0216601af12936805af91a8dccf11a45c5d36f1d"
 PHASE17_BASELINE = "600be06469e789395257d00afdbc11d039369869"
 LEGACY_BASELINE = "8b380bec5e85f6368f7aa2f1c49db818f3abb160"
 KIND = "rollout_quality_v1"
@@ -34,7 +37,9 @@ ROTATIONS = tuple(permutations(range(3)))
 class Setting(BaseModel):
     model_config = ConfigDict(extra="forbid")
     trials: int = Field(default=8, strict=True, ge=1, le=64)
-    method: Literal["legacy","uniform","heuristic","adaptive","combined"] = "legacy"
+    method: Literal["legacy","uniform","heuristic","adaptive","combined","theory","baseline","theory_search","theory_search_adaptive"] = "legacy"
+    theory_config: TheoryConfig | None = None
+    baseline_name: str | None = None
     total_budget: int | None = Field(default=None, strict=True, ge=1, le=1024)
     min_trials: int = Field(default=1, strict=True, ge=1, le=8)
     continuation: str = "Random"
@@ -49,25 +54,52 @@ class Setting(BaseModel):
 
     @property
     def identifier(self):
+        if self.method=='baseline':return 'baseline/'+self.baseline_name
+        if self.method.startswith('theory'):
+            key=sha256(json.dumps(self.theory_config.model_dump(),sort_keys=True).encode()).hexdigest()[:16]
+            return f"{self.method}/{key}/{self.total_budget}/{self.continuation}/{self.time_limit_ms}/min{self.min_trials}"
         if self.method != "legacy":
             return f"{self.method}/{self.total_budget}/{self.continuation}/{self.time_limit_ms}/min{self.min_trials}"
         return f"{self.trials}/{self.continuation}/{self.time_limit_ms}"
 
     @model_validator(mode="after")
     def budget_mode(self):
-        if (self.method=="legacy") != (self.total_budget is None):
+        if (self.method in ("legacy","theory","baseline")) != (self.total_budget is None):
             raise ValueError("総予算方式にはtotal_budgetが必須。従来方式には指定できません")
         if self.method=="legacy" and self.min_trials!=1:
             raise ValueError("従来方式はmin_trials設定に非対応です")
         if self.method!="legacy" and self.trials!=8:
             raise ValueError("総予算方式に候補あたりtrialsは適用しません。既定8のままにしてください")
+        if self.method.startswith('theory') != (self.theory_config is not None):
+            raise ValueError("Theory方式にだけtheory_configが必要です")
+        if (self.method=='baseline') != (self.baseline_name is not None) or (self.baseline_name is not None and self.baseline_name not in NAMES):
+            raise ValueError("baseline方式に既存5戦略名を指定してください")
+        if self.method in ('theory','baseline') and (self.time_limit_ms is not None or self.min_trials!=1):
+            raise ValueError("直接評価には探索時間上限・最低試行を指定できません")
+        if self.method in ('theory','baseline') and self.continuation!='Random':
+            raise ValueError("直接評価は継続戦略を使いません。既定Randomのままにしてください")
         return self
 
     @property
     def strategy_name(self):
+        if self.method=='baseline':return self.baseline_name
+        if self.method.startswith('theory'):return 'theory_policy' if self.method=='theory' else self.method
         return "monte_carlo_rollout" if self.method=="legacy" else METHOD_NAMES[self.method]
 
+    @property
+    def budget_family(self):
+        return 'direct' if self.method in ('theory','baseline') else 'legacy' if self.method=='legacy' else 'budget'
+
+    @property
+    def rollout_bound(self):
+        return 0 if self.budget_family=='direct' else 150*self.trials if self.method=='legacy' else 15*self.total_budget
+
     def create_strategy(self):
+        if self.method=='baseline':return Baseline(self.baseline_name)
+        if self.method=='theory':return TheoryPolicy(self.theory_config)
+        if self.method.startswith('theory_search'):
+            return TheorySearch(self.theory_config,self.method.endswith('adaptive'),self.total_budget,self.continuation,
+                                time_limit_ms=self.time_limit_ms,min_trials=self.min_trials)
         if self.method=="legacy":
             return MonteCarloRollout(self.trials,self.continuation,time_limit_ms=self.time_limit_ms)
         return HybridSearch(self.method,self.total_budget,self.continuation,
@@ -84,10 +116,11 @@ class StudyConfig(BaseModel):
     settings: list[Setting] = Field(min_length=1, max_length=8)
     analyze_position: bool = True
     timeout_seconds: int = Field(default=300, strict=True, ge=1, le=300)
+    seed_partition: Literal['unassigned','development','validation','final'] = 'unassigned'
 
     @model_validator(mode="after")
     def safe_plan(self):
-        if self.baseline_commit not in (BASELINE_COMMIT, PHASE17_BASELINE, LEGACY_BASELINE):
+        if self.baseline_commit not in (BASELINE_COMMIT, PHASE18_BASELINE, PHASE17_BASELINE, LEGACY_BASELINE):
             raise ValueError("既知の確定基準SHAと一致しません")
         if len(set(self.deal_seeds)) != len(self.deal_seeds) or any(not 0 <= s <= 9007199254740991 for s in self.deal_seeds):
             # Python Randomの整数seedは符号で同じ配札になり得るため非負に限定。
@@ -98,11 +131,16 @@ class StudyConfig(BaseModel):
             raise ValueError("重複した設定です")
         if estimate(self)["games"] > 360 or estimate(self)["rollout_upper_bound"] > 500000:
             raise ValueError("最大360対局・概算50万Rollout以内で段階実行してください")
-        modes={s.method=="legacy" for s in self.settings}
+        modes={s.budget_family for s in self.settings}
         if len(modes)>1:
             raise ValueError("候補あたり試行数と総予算方式は同一実験に混在できません")
-        if False in modes and len({(s.total_budget,s.min_trials,s.continuation,s.time_limit_ms) for s in self.settings})!=1:
+        if 'budget' in modes and len({(s.total_budget,s.min_trials,s.continuation,s.time_limit_ms) for s in self.settings})!=1:
             raise ValueError("総予算の方式比較では予算・最低試行・継続戦略・時間上限を揃えてください")
+        starts={'development':0,'validation':1000000,'final':2000000}
+        if any(s.method.startswith('theory') for s in self.settings) and self.seed_partition=='unassigned':
+            raise ValueError("Theory実験には開発・検証・最終評価のseed用途を指定してください")
+        if self.seed_partition!='unassigned' and any(not starts[self.seed_partition]<=s<starts[self.seed_partition]+1000000 for s in self.deal_seeds):
+            raise ValueError("seedが用途別の非重複区分範囲にありません")
         return self
 
 
@@ -112,8 +150,8 @@ def estimate(config, historical=()):
     # 17+16+...+3=150候補/対局。プローブは5候補×設定試行数。
     return {"games": games, "independent_deals": len(config.deal_seeds), "rotations": 6,
             "settings_count":len(config.settings), **resource_plan(config,historical),
-            "rollout_upper_bound": 6*len(config.deal_seeds)*sum(150*s.trials if s.method=="legacy" else 15*s.total_budget for s in config.settings)
-                + (sum(5*s.trials if s.method=="legacy" else s.total_budget for s in config.settings) if config.analyze_position else 0),
+            "rollout_upper_bound": 6*len(config.deal_seeds)*sum(s.rollout_bound for s in config.settings)
+                + (sum(5*s.trials if s.method=="legacy" else s.total_budget or 0 for s in config.settings) if config.analyze_position else 0),
             "note": "候補数×試行数の上限見積もり。継続戦略・残りターンで処理時間は変わります。"}
 
 
@@ -144,6 +182,7 @@ class MeasuredRollout:
 
     def __init__(self, setting):
         self.strategy = setting.create_strategy()
+        self.setting = setting
         self.name, self.version = self.strategy.name, self.strategy.version
         self.samples = []
 
@@ -151,12 +190,17 @@ class MeasuredRollout:
         start = perf_counter_ns()
         decision = self.strategy.choose_detailed(observation, rng)
         elapsed = perf_counter_ns() - start
-        meta = decision.details.optional_metadata
-        self.samples.append({"elapsed_ns": elapsed, "started_rollouts": meta["started_games"],
-                             "executed_rollouts": meta["executed_games"], "accepted_rollouts": meta["completed_games"],
-                             "timed_out": meta["timed_out"],
+        meta = decision.details.optional_metadata or {}
+        self.samples.append({"elapsed_ns": elapsed, "started_rollouts": meta.get("started_games",0),
+                             "executed_rollouts": meta.get("executed_games",0), "accepted_rollouts": meta.get("completed_games",0),
+                             "timed_out": meta.get("timed_out",False),
                              "total_budget":meta.get("total_budget"),"unused_budget":meta.get("unused_budget"),
-                             "heuristic_ns":int(meta.get("heuristic_ms",0)*1e6),"allocation_ns":int(meta.get("allocation_ms",0)*1e6)})
+                             "heuristic_ns":int(meta.get("heuristic_ms",0)*1e6),"allocation_ns":int(meta.get("allocation_ms",0)*1e6),
+                             **({'turn':observation.turn,'round':observation.turn//3+1,
+                                 'phase':'early' if observation.turn<5 else 'middle' if observation.turn<10 else 'late',
+                                 'selected_rank':decision.card.rank,'strong_count':sum(c.rank>=10 for c in observation.hand),
+                                 'middle_count':sum(5<=c.rank<=9 for c in observation.hand),
+                                 'hand_group':'strong_rich' if sum(c.rank>=10 for c in observation.hand)>=len(observation.hand)/2 else 'other'} if self.setting.method.startswith('theory') else {})})
         return replace(decision, details=None)
 
 
@@ -175,7 +219,7 @@ def probe(config, check):
         check()
         choices.append({"setting": setting.identifier, "parameters": setting.model_dump(),
                         "selected_card": asdict(decision.card), "candidates": [asdict(c) for c in decision.details.candidates],
-                        "seed": decision.details.optional_metadata["seed"],
+                        "seed": (decision.details.optional_metadata or {}).get("seed",str(seed)),
                         **({"search_metadata":decision.details.optional_metadata} if setting.method!="legacy" else {})})
     return {"snapshot_id": snapshot, "observation": serialized, "choices": choices,
             "changed": len({json.dumps(c["selected_card"], sort_keys=True) for c in choices}) > 1,
@@ -254,6 +298,14 @@ def summarize_study(config, rows, partial_games=()):
         summaries[-1].update({"heuristic_ms_mean":mean([d.get("heuristic_ns",0)/1e6 for r in costs for d in r["decisions"]]),
             "allocation_ms_mean":mean([d.get("allocation_ns",0)/1e6 for r in costs for d in r["decisions"]]),
             "unused_budget":sum(d.get("unused_budget") or 0 for r in costs for d in r["decisions"])})
+        trends=[]
+        for dimension in ('phase','round','hand_group'):
+            samples=defaultdict(list)
+            for r in costs:
+                for d in r['decisions']:
+                    if dimension in d:samples[str(d[dimension])].append(d['selected_rank'])
+            trends.extend({'dimension':dimension,'group':key,'decisions':len(values),'mean_selected_rank':mean(values)} for key,values in sorted(samples.items()))
+        summaries[-1]['decision_trends']=trends
     baseline = config.settings[0].identifier
     differences = []
     for setting in config.settings[1:]:

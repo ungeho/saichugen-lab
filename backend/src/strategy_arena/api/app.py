@@ -26,6 +26,8 @@ from ..branch_simulation import BranchJobs
 from ..experiments.rollout_quality import StudyConfig, estimate, presets
 from ..experiments.quality_jobs import QualityJobs
 from ..experiments.quality_statistics import compare_saved
+from ..strategies.theories import TheoryConfig, theory_catalog
+from ..strategies.theory_policy import TheoryPolicy
 from ..rule_guide import rule_guide, judge
 from contextlib import asynccontextmanager
 
@@ -85,6 +87,13 @@ class StudyComparison(BaseModel):
     second_setting: str
 
 
+class TheoryEvaluation(BaseModel):
+    config: TheoryConfig
+    seed: int = Field(default=42,strict=True,ge=0,le=9007199254740991)
+    turn: int = Field(default=0,strict=True,ge=0,le=14)
+    player: int = Field(default=0,strict=True,ge=0,le=2)
+
+
 def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     jobs = BranchJobs()
     @asynccontextmanager
@@ -97,6 +106,20 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     lock = Lock()
     store = ExperimentStore(database)
     quality = QualityJobs(store)
+
+    @app.get('/api/theories')
+    def theories():
+        return theory_catalog()
+
+    @app.post('/api/theories/evaluate')
+    def theory_evaluation(request: TheoryEvaluation):
+        game=Game(request.seed)
+        for _ in range(request.turn):
+            game.play(tuple(game.observe(p).legal_actions[0] for p in range(3)))
+        observation=game.observe(request.player)
+        decision=TheoryPolicy(request.config).choose_detailed(observation,Random(0))
+        return {'observation':asdict(observation),'decision':asdict(decision),
+                'generation':'指定seedで先頭合法手を出して作った人工局面。実対戦の局面ではありません。'}
 
     @app.get("/api/quality-studies/presets")
     def quality_presets():

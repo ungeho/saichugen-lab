@@ -1,0 +1,59 @@
+{
+  "baseline_commit": "e12a27e40233e13a2d5faaae8776bb3e790359d5",
+  "policy_seed": 42,
+  "seed_partition": "development",
+  "opponents": [
+    "Random",
+    "Heuristic"
+  ],
+  "analyze_position": true,
+  "timeout_seconds": 120,
+  "name": "Theory Stage1 / 強い札の温存",
+  "deal_seeds": [
+    100
+  ],
+  "settings": [
+    {
+      "method": "theory",
+      "theory_config": {
+        "theories": [
+          {
+            "id": "reserve_strong",
+            "enabled": false,
+            "params": {}
+          }
+        ]
+      }
+    },
+    {
+      "method": "theory",
+      "theory_config": {
+        "theories": [
+          {
+            "id": "reserve_strong",
+            "enabled": true,
+            "params": {}
+          }
+        ]
+      }
+    },
+    {
+      "method": "theory",
+      "theory_config": {
+        "theories": [
+          {
+            "id": "reserve_strong",
+            "enabled": true,
+            "params": {
+              "mode": "consume"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "baseline",
+      "baseline_name": "Heuristic"
+    }
+  ]
+}
