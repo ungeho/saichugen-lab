@@ -1,0 +1,25 @@
+{
+  "baseline_commit": "600be06469e789395257d00afdbc11d039369869",
+  "name": "Phase18 Stage1 / random",
+  "deal_seeds": [
+    0,
+    1
+  ],
+  "policy_seed": 42,
+  "opponents": [
+    "Random",
+    "Random"
+  ],
+  "settings": [
+    {
+      "trials": 8,
+      "continuation": "Random"
+    },
+    {
+      "trials": 16,
+      "continuation": "Random"
+    }
+  ],
+  "analyze_position": true,
+  "timeout_seconds": 300
+}

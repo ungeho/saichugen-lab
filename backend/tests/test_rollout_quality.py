@@ -58,10 +58,18 @@ def test_reproducibility_fair_deals_rotation_and_counts(monkeypatch):
 
 
 def synthetic(cfg, setting, seed, reward, rotations=6):
-    return [{'setting':cfg.settings[setting].identifier,'deal_id':str(seed),'rotation':r,'seat':0,
-             'terminal_rewards':[reward,-reward,0],'scores':[10,5,20],'winners':[0],
+    result=[]
+    for r in range(rotations):
+        roles=module.ROTATIONS[r]; seat=roles.index(0)
+        winners=([seat] if reward==2 else [seat,(seat+1)%3] if reward==1 else [(seat+1)%3] if reward==-1 else [0,1,2])
+        result.append({'setting':cfg.settings[setting].identifier,'deal_id':str(seed),'seed':seed,'rotation':r,'seat':seat,
+             'roles':roles,'strategies':tuple('monte_carlo_rollout' if role==0 else cfg.opponents[role-1] for role in roles),
+             'rollout_parameters':cfg.settings[setting].model_dump(),'strategy_version':'1',
+             'terminal_rewards':terminal_rewards(winners),'scores':[10,5,20],'winners':winners,
              'game_elapsed_ns':1000000000,'decisions':[{'elapsed_ns':1000000,'started_rollouts':2,
-               'executed_rollouts':2,'accepted_rollouts':2,'timed_out':False}]} for r in range(rotations)]
+               'executed_rollouts':2,'accepted_rollouts':2,'timed_out':False}]})
+    return result
+
 
 
 def test_cluster_ci_paired_difference_and_partial_exclusion():
@@ -69,10 +77,12 @@ def test_cluster_ci_paired_difference_and_partial_exclusion():
     rows=synthetic(cfg,0,0,-1)+synthetic(cfg,0,1,1)+synthetic(cfg,1,0,0)+synthetic(cfg,1,1,2)
     result=summarize_study(cfg,rows)
     assert result['settings'][0]['average_terminal_reward']==0
-    assert result['settings'][0]['reward_ci95']==[-1,1]
+    assert result['settings'][0]['reward_ci95'] is None
+    assert result['settings'][0]['uncertainty']['status']=='insufficient_deals'
+    assert interval([-1,1],42)==[-1,1]
     assert result['settings'][0]['independent_deals']==2
     assert result['differences'][0]['difference']==1
-    assert result['differences'][0]['ci95']==[1,1]
+    assert result['differences'][0]['ci95'] is None
     assert result['differences'][0]['independent_deals']==2
     partial=summarize_study(cfg,rows[:-1])
     assert partial['settings'][1]['excluded_partial_games']==5
@@ -97,7 +107,7 @@ def test_invalid_or_excessive_plan(changes):
 
 def test_presets_and_estimate_cover_required_settings():
     plans=presets()
-    assert len(plans)==2
+    assert len(plans)>=2
     settings=[s for p in plans for s in p['config']['settings']]
     assert {s['trials'] for s in settings}=={8,16,32,64}
     assert {s['continuation'] for s in settings}=={'Random','Greedy','ScoreAware'}
@@ -187,7 +197,7 @@ def test_completed_but_discarded_rollouts_are_counted(monkeypatch):
 
 def test_api_saved_history_export_and_errors(tmp_path):
     with TestClient(create_app(tmp_path/'api.sqlite')) as client:
-        assert len(client.get('/api/quality-studies/presets').json())==2
+        assert len(client.get('/api/quality-studies/presets').json())>=2
         cfg=config().model_dump()
         assert client.post('/api/quality-studies/estimate',json=cfg).json()['games']==12
         response=client.post('/api/quality-studies',json=cfg)

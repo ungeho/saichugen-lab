@@ -25,6 +25,7 @@ from ..comparison import compare_position, initial_strategy_copies, position_at
 from ..branch_simulation import BranchJobs
 from ..experiments.rollout_quality import StudyConfig, estimate, presets
 from ..experiments.quality_jobs import QualityJobs
+from ..experiments.quality_statistics import compare_saved
 from ..rule_guide import rule_guide, judge
 from contextlib import asynccontextmanager
 
@@ -77,6 +78,13 @@ class RuleSample(BaseModel):
     cards: list[BranchCard] = Field(min_length=3, max_length=3)
 
 
+class StudyComparison(BaseModel):
+    first_id: str
+    second_id: str
+    first_setting: str
+    second_setting: str
+
+
 def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     jobs = BranchJobs()
     @asynccontextmanager
@@ -96,7 +104,18 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
 
     @app.post("/api/quality-studies/estimate")
     def quality_estimate(config: StudyConfig):
-        return estimate(config)
+        return estimate(config,[p for i,p in store.iter_experiments()])
+
+    @app.post("/api/quality-studies/compare")
+    def quality_compare(config: StudyComparison):
+        try:
+            first=quality.get(config.first_id,full=True)
+            second=quality.get(config.second_id,full=True)
+            return compare_saved(first,second,config.first_setting,config.second_setting)
+        except KeyError:
+            raise HTTPException(404,"保存実験が見つかりません") from None
+        except ValueError as error:
+            raise HTTPException(422,str(error)) from None
 
     @app.get("/api/quality-studies")
     def quality_history():

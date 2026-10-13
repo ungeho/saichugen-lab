@@ -17,7 +17,8 @@ def main():
     parser.add_argument("--run", action="store_true")
     args = parser.parse_args()
     config = StudyConfig.model_validate_json(args.config.read_text(encoding="utf-8"))
-    print(json.dumps(estimate(config), ensure_ascii=False))
+    history=list(ExperimentStore(args.database).iter_experiments()) if args.database.exists() else []
+    print(json.dumps(estimate(config,[p for i,p in history]), ensure_ascii=False))
     if not args.run:
         print("実行する場合だけ--runを追加してください。")
         return

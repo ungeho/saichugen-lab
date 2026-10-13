@@ -22,7 +22,8 @@ from ..strategies.base import Decision
 from ..strategies.baselines import NAMES, Baseline
 from ..strategies.monte_carlo import MonteCarloRollout
 
-BASELINE_COMMIT = "8b380bec5e85f6368f7aa2f1c49db818f3abb160"
+BASELINE_COMMIT = "600be06469e789395257d00afdbc11d039369869"
+LEGACY_BASELINE = "8b380bec5e85f6368f7aa2f1c49db818f3abb160"
 KIND = "rollout_quality_v1"
 ROTATIONS = tuple(permutations(range(3)))
 
@@ -58,8 +59,8 @@ class StudyConfig(BaseModel):
 
     @model_validator(mode="after")
     def safe_plan(self):
-        if self.baseline_commit != BASELINE_COMMIT:
-            raise ValueError("Phase 16の確定SHAと一致しません")
+        if self.baseline_commit not in (BASELINE_COMMIT, LEGACY_BASELINE):
+            raise ValueError("既知の確定基準SHAと一致しません")
         if len(set(self.deal_seeds)) != len(self.deal_seeds) or any(not 0 <= s <= 9007199254740991 for s in self.deal_seeds):
             # Python Randomの整数seedは符号で同じ配札になり得るため非負に限定。
             raise ValueError("配札seedは重複のない非負の安全な整数にしてください")
@@ -72,10 +73,12 @@ class StudyConfig(BaseModel):
         return self
 
 
-def estimate(config):
+def estimate(config, historical=()):
+    from .quality_planning import resource_plan
     games = len(config.deal_seeds) * 6 * len(config.settings)
     # 17+16+...+3=150候補/対局。プローブは5候補×設定試行数。
     return {"games": games, "independent_deals": len(config.deal_seeds), "rotations": 6,
+            "settings_count":len(config.settings), **resource_plan(config,historical),
             "rollout_upper_bound": 6*len(config.deal_seeds)*150*sum(s.trials for s in config.settings)
                 + (5*sum(s.trials for s in config.settings) if config.analyze_position else 0),
             "note": "候補数×試行数の上限見積もり。継続戦略・残りターンで処理時間は変わります。"}
@@ -84,7 +87,7 @@ def estimate(config):
 def presets():
     directory = Path(__file__).resolve().parents[4] / "experiments" / "presets"
     return [{"id": p.stem, "config": StudyConfig.model_validate_json(p.read_text(encoding="utf-8")).model_dump()}
-            for p in sorted(directory.glob("rollout-*.json"))]
+            for p in sorted(directory.glob("rollout-*.json"), key=lambda p:(0 if p.stem=="rollout-phase18-stage1-random" else 1 if "phase18-stage1" in p.stem else 3 if "phase18-stage2" in p.stem else 2,p.stem))]
 
 
 def runtime_info():
@@ -183,22 +186,23 @@ def summarize_study(config, rows, partial_games=()):
     groups = defaultdict(lambda: defaultdict(list))
     for row in rows:
         groups[row["setting"]][row["deal_id"]].append(row)
+    from .quality_statistics import complete_deals, paired_clusters, uncertainty
     summaries = []
     clusters = {}
     for setting in config.settings:
         recorded = [r for rs in groups[setting.identifier].values() for r in rs]
         costs = recorded + [r for r in partial_games if r["setting"] == setting.identifier]
-        complete = {deal: rs for deal, rs in groups[setting.identifier].items()
-                    if len(rs) == 6 and {r["rotation"] for r in rs} == set(range(6))}
+        complete = complete_deals(config, rows, setting)
         used = [r for rs in complete.values() for r in rs]
         means = {deal: float(np.mean([r["terminal_rewards"][r["seat"]] for r in rs])) for deal,rs in complete.items()}
-        clusters[setting.identifier] = means
+        clusters[setting.identifier] = complete
+        info = uncertainty(list(means.values()), config.policy_seed)
         timings = [d["elapsed_ns"]/1e6 for r in costs for d in r["decisions"]]
         mean = lambda seq: float(np.mean(seq)) if seq else None
         summaries.append({"setting": setting.identifier, "parameters": setting.model_dump(),
             "games": len(used), "recorded_games": len(recorded), "excluded_partial_games": len(recorded)-len(used),
             "independent_deals": len(complete), "average_terminal_reward": mean(list(means.values())),
-            "reward_ci95": interval(list(means.values()), config.policy_seed % (2**32)),
+            "reward_ci95": info["ci95"], "uncertainty": info,
             "sole_win_rate": mean([int(len(r["winners"]) == 1 and r["seat"] in r["winners"]) for r in used]),
             "joint_win_rate": mean([int(r["seat"] in r["winners"] and len(r["winners"])>1) for r in used]),
             "average_score": mean([r["scores"][r["seat"]] for r in used]),
@@ -213,11 +217,8 @@ def summarize_study(config, rows, partial_games=()):
     baseline = config.settings[0].identifier
     differences = []
     for setting in config.settings[1:]:
-        common = sorted(clusters[baseline].keys() & clusters[setting.identifier].keys())
-        values = [clusters[setting.identifier][d]-clusters[baseline][d] for d in common]
-        differences.append({"setting": setting.identifier, "baseline": baseline, "independent_deals": len(common),
-                            "difference": float(np.mean(values)) if values else None,
-                            "ci95": interval(values, config.policy_seed % (2**32))})
+        comparison = paired_clusters(clusters[baseline], clusters[setting.identifier], config.settings[0], setting, config.policy_seed)
+        differences.append({"setting": setting.identifier, "baseline": baseline, **comparison})
     return {"settings": summaries, "differences": differences, "baseline": baseline,
             "method": "各設定で6席順が揃った配札の平均を1標本とする2000回百分位ブートストラップ。差は共通配札の対応差。",
-            "warning": "独立配札が少ない場合は不安定。1配札では区間未提供。分散0でも確実性を保証しません。"}
+            "warning": "独立配札が少ない場合は不安定。10配札未満・標本分散0では区間非表示。10〜19配札も参考値です。"}

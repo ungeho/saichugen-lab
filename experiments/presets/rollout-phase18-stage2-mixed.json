@@ -1,0 +1,33 @@
+{
+  "baseline_commit": "600be06469e789395257d00afdbc11d039369869",
+  "name": "Phase18 Stage2 / mixed / 10 deals",
+  "deal_seeds": [
+    0,
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "policy_seed": 42,
+  "opponents": [
+    "Random",
+    "Heuristic"
+  ],
+  "settings": [
+    {
+      "trials": 8,
+      "continuation": "Random"
+    },
+    {
+      "trials": 16,
+      "continuation": "Random"
+    }
+  ],
+  "analyze_position": true,
+  "timeout_seconds": 300
+}

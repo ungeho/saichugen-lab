@@ -28,7 +28,9 @@ class QualityJobs:
             payload = {"experiment_kind": KIND, "schema_version": 1, "status": "running",
                        "baseline_commit": config.baseline_commit, "config": config.model_dump(),
                        "rule_version": RULE_VERSION, "reward_version": REWARD_VERSION,
-                       "runtime": runtime_info(), "estimate": estimate(config), "results": [], "positions": [], "partial_games": [],
+                       "runtime": runtime_info(), "estimate": estimate(config,[p for i,p in self.store.iter_experiments()]), "results": [], "positions": [], "partial_games": [],
+                       "information_condition":"imperfect", "runner_seed_scheme":"quality-policy-v1",
+                       "statistics_version":"deal-cluster-v2",
                        "elapsed_seconds": 0, "error": None}
             identifier = self.store.save(payload)
             self.active = identifier

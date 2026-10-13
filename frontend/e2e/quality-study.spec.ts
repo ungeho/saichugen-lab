@@ -17,6 +17,8 @@ test('探索品質の小規模実験を保存し、不確実性・時間・履�
  await expect(panel.getByRole('status').filter({hasText:'完了'})).toContainText('24 / 24');
  await expect(panel).toContainText('百分位ブートストラップ');
  await expect(panel.locator('table').first().locator('tbody tr')).toHaveCount(2);
+ await expect(panel.locator('table').first()).toContainText('暫定');
+ await expect(panel.locator('table').first()).toContainText('10件未満のため区間を表示しません');
  await expect(panel.getByRole('img',{name:'Rollout設定別の平均終局報酬と95%区間',exact:true})).toBeVisible();
  await expect(panel.getByRole('img',{name:'判断時間と平均終局報酬の散布図',exact:true})).toBeVisible();
  await expect(panel.getByRole('img',{name:'基準設定との対応報酬差と95%区間',exact:true})).toBeVisible();
@@ -27,6 +29,27 @@ test('探索品質の小規模実験を保存し、不確実性・時間・履�
  await expect(panel.getByRole('status').filter({hasText:'完了'})).toContainText('24 / 24');
  await page.setViewportSize({width:390,height:844});
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+});
+
+test('保存実験の相手構成が異なる場合は対応比較を拒否する',async({page,request})=>{
+ const presets=await (await request.get('http://127.0.0.1:8000/api/quality-studies/presets')).json();
+ const base=presets[0].config;
+ const ids:string[]=[];
+ for(const opponents of [['Random','Random'],['Heuristic','Heuristic']]){
+  const config={...base,name:'条件照合 '+opponents.join('/'),deal_seeds:[80],opponents,analyze_position:false,
+   settings:[{trials:1,continuation:'Random',time_limit_ms:0}]};
+  const submitted=await request.post('http://127.0.0.1:8000/api/quality-studies',{data:config});
+  expect(submitted.ok()).toBeTruthy();const {id}=await submitted.json();ids.push(id);
+  await expect.poll(async()=> (await(await request.get('http://127.0.0.1:8000/api/quality-studies/'+id)).json()).status).toBe('completed');
+ }
+ await page.goto('/');await page.getByRole('button',{name:'探索品質',exact:true}).click();
+ const comparison=page.getByRole('region',{name:'保存実験の対応条件照合'});
+ await comparison.getByLabel('比較元の実験').selectOption(ids[0]);
+ await expect(comparison.getByLabel('比較元の設定')).toHaveValue('1/Random/0.0');
+ await comparison.getByLabel('比較先の実験').selectOption(ids[1]);
+ await expect(comparison.getByLabel('比較先の設定')).toHaveValue('1/Random/0.0');
+ await comparison.getByRole('button',{name:'条件を照合して対応比較'}).click();
+ await expect(comparison.getByRole('alert')).toContainText('対戦相手が一致しません');
 });
 
 test('不正計画の拒否と、中断を完了と区別する',async({page})=>{
