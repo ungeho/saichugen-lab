@@ -1,0 +1,3 @@
+export type Point={n:number;mean:number;sd:number|null;interval:number[]|null;elapsed_seconds:number;deal_id:string;mean_change:number|null};
+export type Series={spec:{series_id:string;version:number;hypothesis:string;interpretation:string};created_at:string;time_basis:string;state:string;independent_deals:number;games:number;elapsed_seconds:number;signature:null|{compositions:{name:string}[];strategies:{reference:string}[]};curves:Record<string,Point[]>;between:Record<string,Point[]>;integrated:Record<string,Point[]>;entries:unknown[];recommendations:unknown[];warning:string;order:string;integrity_errors:string[]};
+export function curveRows(curve:Point[]){return curve.map(p=>[p.n,p.mean,p.interval?.[0]??null,p.interval?.[1]??null]);}

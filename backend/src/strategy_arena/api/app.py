@@ -34,6 +34,7 @@ from ..experiments.evolution import Evolution, EvolutionRequest, Generation, Sta
 from ..experiments.evaluation_lab import EvaluationJobs, EvaluationRequest, ablation_definitions, estimate_evaluation, analyze_arena
 from ..experiments.evaluation_statistics import PlanningInput,plan_samples
 from ..experiments.design_lab import DesignLab,PlanSpec,DesignPlanningInput,design_sample_plan,AllocationRequest,allocate,pilot_template
+from ..experiments.evidence_lab import EvidenceLab,SeriesSpec,EvidenceSource,Projection
 from ..rule_guide import rule_guide, judge
 from contextlib import asynccontextmanager
 
@@ -120,6 +121,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     evolution=Evolution(store,definitions,arena)
     evaluation=EvaluationJobs(store,definitions,arena,evolution)
     design=DesignLab(store,definitions,evaluation,evolution)
+    evidence=EvidenceLab(store,design)
 
     def evolution_call(action):
         try:return action()
@@ -177,6 +179,25 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
 
     @app.post('/api/design/recommendations/{identifier}/draft',status_code=201)
     def design_recommended(identifier:str,request:RecommendedPlan):return evolution_call(lambda:design.recommended_draft(identifier,request.index))
+
+    @app.get('/api/evidence/series')
+    def evidence_history():return evidence.history()
+
+    @app.post('/api/evidence/series',status_code=201)
+    def evidence_create(request:SeriesSpec):return evolution_call(lambda:evidence.create(request))
+
+    @app.get('/api/evidence/series/{identifier}/{version}')
+    @app.get('/api/evidence/series/{identifier}/{version}/export')
+    def evidence_read(identifier:str,version:int):return evolution_call(lambda:evidence.get(identifier,version))
+
+    @app.post('/api/evidence/series/{identifier}/{version}/entries',status_code=201)
+    def evidence_add(identifier:str,version:int,request:EvidenceSource):return evolution_call(lambda:evidence.add(identifier,version,request))
+
+    @app.post('/api/evidence/series/{identifier}/{version}/projection')
+    def evidence_project(identifier:str,version:int,request:Projection):return evolution_call(lambda:evidence.project(identifier,version,request))
+
+    @app.post('/api/evidence/series/{identifier}/{version}/draft',status_code=201)
+    def evidence_draft(identifier:str,version:int):return evolution_call(lambda:evidence.draft(identifier,version))
 
     @app.post('/api/evaluation/planning')
     def evaluation_planning(request:PlanningInput):return plan_samples(request)

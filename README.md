@@ -278,3 +278,7 @@ Phase 18のStage 1（2配札・8/16試行）はプリセットから選択でき
 ### Experimental Design Lab（Phase 24）
 
 仮説・戦略版・共通配札・相手構成・比較family・計算予算を、実行前に固定する画面です。Draft保存→事前登録→Hash付き実行を分離し、進捗、停止、JSON保存、次の設計案を確認できます。構成間の効果差も独立配札単位で比較します。推薦はDraftのみ生成し、自動実行しません。詳細と小規模追試は[docs/phase24.md](docs/phase24.md)を参照してください。既存のWindows setup.ps1／dev.ps1の利用方法は変わりません。
+
+### Evidence Accumulation Lab（Phase 25）
+
+完了PlanをEvidence Seriesへ関連付け、追加独立配札による平均報酬差・ばらつき・計算時間の変化を確認できます。実配札の重複と条件不一致を拒否し、構成別の収束グラフ、追加予算見積もり、次のDraft提案を表示します。途中区間は探索的な診断であり、逐次的な採用・棄却を保証しません。使い方と実測は[docs/phase25.md](docs/phase25.md)を参照してください。既存のWindows起動手順は維持しています。

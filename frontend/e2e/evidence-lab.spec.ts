@@ -1,0 +1,24 @@
+import {test,expect} from '@playwright/test';
+test('Evidence Seriesで完了Planを追加し収束・予算・推薦・重複拒否を見る',async({page,request})=>{
+ test.setTimeout(60000);
+ const stamp=Date.now();
+ const spec=await(await request.post('/api/design/template',{data:{}})).json();spec.plan_id='evidence-ui-'+stamp;spec.references=[];spec.evaluation.start_offset=40000+(stamp%20000);spec.evaluation.deals=2;
+ const draft=await request.post('/api/design/plans',{data:spec});expect(draft.status()).toBe(201);
+ const url=`/api/design/plans/${spec.plan_id}/1`;const registered=await(await request.post(url+'/register',{data:{}})).json();
+ expect((await request.post(url+'/start',{data:{plan_hash:registered.plan_hash}})).status()).toBe(202);
+ await expect.poll(async()=>(await(await request.get(url)).json()).state,{timeout:30000}).toBe('Completed');
+ await page.goto('/');await page.getByRole('button',{name:'Evidence Accumulation Lab',exact:true}).click();
+ const panel=page.getByRole('region',{name:'Evidence Accumulation Lab'});
+ await panel.getByLabel('Evidence Series JSON').fill(JSON.stringify({series_id:'evidence-'+stamp,hypothesis:'追加配札の探索的収束'}));
+ await panel.getByRole('button',{name:'Seriesを保存',exact:true}).click();
+ const source={plan_id:spec.plan_id,plan_version:1,plan_hash:registered.plan_hash,origin:'new_pilot'};
+ await panel.getByLabel('Evidence参照JSON').fill(JSON.stringify(source));
+ await panel.getByRole('button',{name:'完了結果を関連付ける',exact:true}).click();
+ await expect(panel.getByRole('img',{name:'累積報酬差 composition:0:target:0',exact:true})).toBeVisible();
+ await expect(panel).toContainText('2配札 / 48対局');
+ await panel.getByRole('button',{name:'追加費用と幅を見積もる',exact:true}).click();await expect(panel.getByRole('status')).toContainText('240');
+ await panel.getByRole('button',{name:'完了結果を関連付ける',exact:true}).click();await expect(panel.getByRole('alert')).toContainText('再追加');
+ const download=page.waitForEvent('download');await panel.getByRole('button',{name:'Evidence JSONを保存',exact:true}).click();expect((await download).suggestedFilename()).toContain('evidence-');
+ await panel.getByRole('button',{name:'次のDraft Planを生成（実行しない）',exact:true}).click();await expect(panel).toContainText('Draft');
+ await page.setViewportSize({width:390,height:844});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+});
