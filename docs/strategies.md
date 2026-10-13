@@ -18,6 +18,8 @@ register("MyStrategy", MyStrategy)
 
 登録をAPIまたは実験runnerの起動前に実行する。UIは `/api/strategies` の登録一覧を取得する。1試合につき座席ごとに戦略インスタンスを作るため、公開履歴から学んだ状態をインスタンスに保持できる。試合間で学習状態を共有する機構はまだない。
 
+図鑑の説明はregisterの任意のdescription引数へAlgorithmDescriptionを渡す。新しいUIは `/api/algorithms` の名前と説明を利用する。説明の定義場所と詳細ログの提供方法は [アルゴリズム図鑑と判断ログ](algorithm-guide.md) を参照。従来の2引数登録・chooseのみの戦略も利用できる。
+
 ## 比較用5戦略
 
 | 戦略 | 方針 |

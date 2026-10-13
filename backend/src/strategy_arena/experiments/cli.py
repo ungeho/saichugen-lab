@@ -17,13 +17,15 @@ def main():
     parser.add_argument("--deals", type=int, default=100)
     parser.add_argument("--strategies", nargs=3, choices=strategy_names(), default=["Random", "Greedy", "Heuristic"])
     parser.add_argument("--output", type=Path, default=Path("results.json"))
+    parser.add_argument("--capture-details", action="store_true", help="判断の詳細を保存（大量対戦では省略を推奨）")
     args = parser.parse_args()
     if args.deals < 1:
         parser.error("配札数は1以上")
     start = perf_counter()
-    results = run_experiment(list(range(args.seed, args.seed + args.deals)), tuple(args.strategies))
+    results = run_experiment(list(range(args.seed, args.seed + args.deals)), tuple(args.strategies), capture_details=args.capture_details)
     payload = {"rule_version": RULE_VERSION, "information_condition": "imperfect",
-               "config": {"seed": args.seed, "deals": args.deals, "strategies": args.strategies, "rotate": True},
+               "config": {"seed": args.seed, "deals": args.deals, "strategies": args.strategies, "rotate": True, "capture_details": args.capture_details},
+               "strategy_parameters": {},
                "strategy_versions": {name: create_strategy(name).version for name in args.strategies},
                "results": results, "summary": summarize(results)}
     args.output.parent.mkdir(parents=True, exist_ok=True)

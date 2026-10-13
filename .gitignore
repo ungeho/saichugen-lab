@@ -6,6 +6,7 @@ dist/
 *.sqlite3
 artifacts/
 .tools/
+.dev-state/
 .uv-cache/
 .pnpm-store/
 .test-tmp/
@@ -14,3 +15,4 @@ artifacts/
 test-results/
 playwright-report/
 *.tsbuildinfo
+.test-tmp-branch*/

@@ -20,3 +20,8 @@ class ExperimentStore:
         with sqlite3.connect(self.path) as connection:
             row = connection.execute("SELECT payload FROM experiments WHERE id = ?", (identifier,)).fetchone()
         return json.loads(row[0]) if row else None
+
+    def iter_experiments(self):
+        with sqlite3.connect(self.path) as connection:
+            for identifier, payload in connection.execute("SELECT id, payload FROM experiments ORDER BY rowid"):
+                yield identifier, json.loads(payload)

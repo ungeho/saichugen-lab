@@ -3,6 +3,13 @@ from fastapi.testclient import TestClient
 from strategy_arena.api.app import create_app
 
 
+def test_health(tmp_path):
+    client = TestClient(create_app(tmp_path / "experiments.sqlite3"))
+    response = client.get("/api/health")
+    assert response.status_code == 200
+    assert response.json() == {"status": "ok"}
+
+
 def test_human_and_auto_game_and_public_boundary(tmp_path):
     client = TestClient(create_app(tmp_path / "experiments.sqlite3"))
     created = client.post("/api/games", json={}).json()

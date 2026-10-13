@@ -13,7 +13,7 @@ backend/
       cards.py                カードとデッキ
       state.py                エンジン専用の完全状態
       observation.py          プレイヤー別の不変な観測値
-      rules.py                原典版の比較・得点・終了条件
+      rules.py                GPCC資料・公開二次資料に基づく比較・得点・終了条件
       engine.py               合法手検証と状態遷移
       replay.py               初期配置と行動列から再現
     strategies/
