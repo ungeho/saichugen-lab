@@ -4,6 +4,7 @@ test('候補生成と登録、親子評価、保留、提案JSONを分離する'
  await page.goto('/');await page.getByRole('button',{name:'Strategy Evolution',exact:true}).click();
  const panel=page.getByRole('region',{name:'Strategy Evolution',exact:true});
  await expect(panel).toContainText('少数配札で自動採用しません');
+ await panel.getByLabel('Evolution親戦略').selectOption('codex_reserve@1.0.0');
  await panel.getByLabel('生成候補数').fill('1');
  // 既存版と衝突しないテスト専用patch。生成設定を入力に固定する。
  const patch=String(10000+Date.now()%900000);

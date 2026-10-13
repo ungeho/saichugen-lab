@@ -1,0 +1,39 @@
+{
+  "name": "Phase23事前パイロット adaptive_ablation",
+  "participants": [
+    "codex_adaptive_theorist@1.0.0",
+    "codex_adaptive_theorist@1.0.20",
+    "codex_adaptive_theorist@1.0.21",
+    "codex_adaptive_theorist@1.0.10"
+  ],
+  "opponents": [
+    {
+      "name": "Random / Heuristic",
+      "strategies": [
+        "Random",
+        "Heuristic"
+      ]
+    },
+    {
+      "name": "Greedy / ScoreAware",
+      "strategies": [
+        "Greedy",
+        "ScoreAware"
+      ]
+    }
+  ],
+  "deals": 2,
+  "start_offset": 700,
+  "seed_partition": "development",
+  "policy_seed": 42,
+  "include_expensive": false,
+  "timeout_seconds": 180,
+  "alpha": 0.05,
+  "minimum_effect": 0.25,
+  "power": 0.8,
+  "max_deals": 1000,
+  "weights": null,
+  "purpose": "adaptive_ablation",
+  "evolution_id": null,
+  "evaluation_mode": "fixed"
+}

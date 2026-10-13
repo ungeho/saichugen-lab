@@ -113,6 +113,7 @@ def test_final_seed_one_use_and_explicit_promotion(tmp_path,monkeypatch):
     service,definitions,jobs,r=setup(tmp_path,deals=1)
     # 統計関数の別テストとは分離し、通過済み証拠の状態遷移とseed予約を検証。
     monkeypatch.setattr(module,'assessment',lambda *args:{'passed':True,'reasons':[]})
+    monkeypatch.setattr(module,'fixed_evidence',lambda *args,**kwargs:{'decision':'positive','interval':[.1,.9]})
     try:
         refs=[c['reference'] for c in r['candidates']]
         for stage in ('development','validation','final'):
@@ -130,6 +131,7 @@ def test_changed_evaluator_blocks_validation_evidence(tmp_path,monkeypatch):
     import strategy_arena.experiments.evolution as module
     service,definitions,jobs,r=setup(tmp_path,deals=1)
     monkeypatch.setattr(module,'assessment',lambda *args:{'passed':True,'reasons':[]})
+    monkeypatch.setattr(module,'fixed_evidence',lambda *args,**kwargs:{'decision':'positive','interval':[.1,.9]})
     try:
         refs=[c['reference'] for c in r['candidates']]
         for stage in ('development','validation'):

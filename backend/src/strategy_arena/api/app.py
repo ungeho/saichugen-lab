@@ -29,8 +29,10 @@ from ..experiments.quality_statistics import compare_saved
 from ..strategies.theories import TheoryConfig, theory_catalog
 from ..strategies.theory_policy import TheoryPolicy
 from ..strategies.declarative import DefinitionStore,StrategyDefinition
-from ..experiments.arena import ArenaRequest,arena_jobs,arena_estimate,compare_arena,KIND as ARENA_KIND
+from ..experiments.arena import ArenaPlan,ArenaRequest,arena_jobs,arena_estimate,compare_arena,KIND as ARENA_KIND
 from ..experiments.evolution import Evolution, EvolutionRequest, Generation, StageRequest, Adoption, generate
+from ..experiments.evaluation_lab import EvaluationJobs, EvaluationRequest, ablation_definitions, estimate_evaluation, analyze_arena
+from ..experiments.evaluation_statistics import PlanningInput,plan_samples
 from ..rule_guide import rule_guide, judge
 from contextlib import asynccontextmanager
 
@@ -104,6 +106,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         yield
         jobs.close()
         quality.close()
+        evaluation.close()
         arena.close()
     app = FastAPI(title="Strategy Arena", lifespan=lifespan)
     sessions = {}
@@ -113,12 +116,56 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     definitions=DefinitionStore(database)
     arena=arena_jobs(store)
     evolution=Evolution(store,definitions,arena)
+    evaluation=EvaluationJobs(store,definitions,arena,evolution)
 
     def evolution_call(action):
         try:return action()
         except KeyError:raise HTTPException(404,'進化実験がありません') from None
         except ValueError as error:raise HTTPException(422,str(error)) from None
         except RuntimeError as error:raise HTTPException(409,str(error)) from None
+
+    @app.post('/api/evaluation/planning')
+    def evaluation_planning(request:PlanningInput):return plan_samples(request)
+
+    @app.post('/api/evaluation/ablation/{family}')
+    def evaluation_ablation(family:Literal['reserve_ablation','adaptive_ablation']):
+        def create():
+            values=ablation_definitions(family)
+            for d in values:definitions.add(d)
+            return EvaluationRequest(name=family,participants=[d.reference for d in values],opponents=[{'name':'Random / Heuristic','strategies':['Random','Heuristic']},{'name':'Greedy / ScoreAware','strategies':['Greedy','ScoreAware']}],purpose=family).model_dump(mode='json')
+        return evolution_call(create)
+
+    @app.get('/api/evaluation/from-evolution/{identifier}')
+    def evaluation_from_evolution(identifier:str):
+        def create():
+            value=evolution.get(identifier)
+            refs=[value['parent']['id']+'@'+value['parent']['version'],*[d['id']+'@'+d['version'] for d in value['children']]]
+            return EvaluationRequest(name=value['settings']['name']+' / Evaluation',participants=refs,opponents=[{'name':'Evolutionの相手','strategies':value['settings']['opponents']}],evolution_id=identifier).model_dump(mode='json')
+        return evolution_call(create)
+
+    @app.get('/api/evaluation/analyze-arena/{identifier}')
+    def evaluation_analyze_arena(identifier:str):
+        def analyze():
+            value=arena.get(identifier,True);plan=ArenaPlan.model_validate(value['config'])
+            request=EvaluationRequest(participants=[s.reference for s in plan.settings],opponents=[{'name':'保存済み相手','strategies':[o.reference for o in plan.opponent_entries]}],deals=len(plan.deal_seeds),seed_partition='development')
+            return analyze_arena(value,request,fixed_complete=value['status']=='completed')
+        return evolution_call(analyze)
+
+    @app.post('/api/evaluation/estimate')
+    def evaluation_estimate(request:EvaluationRequest):return evolution_call(lambda:estimate_evaluation(request,definitions))
+
+    @app.post('/api/evaluation/studies',status_code=202)
+    def evaluation_start(request:EvaluationRequest):return evolution_call(lambda:evaluation.submit(request))
+
+    @app.get('/api/evaluation/studies')
+    def evaluation_history():return evaluation.history()
+
+    @app.get('/api/evaluation/studies/{identifier}')
+    @app.get('/api/evaluation/studies/{identifier}/export')
+    def evaluation_read(identifier:str):return evolution_call(lambda:evaluation.get(identifier))
+
+    @app.post('/api/evaluation/studies/{identifier}/cancel')
+    def evaluation_cancel(identifier:str):return evolution_call(lambda:evaluation.cancel(identifier))
 
     @app.post('/api/evolution/generate')
     def evolution_generate(request:Generation):

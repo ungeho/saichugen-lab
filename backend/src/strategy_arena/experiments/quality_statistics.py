@@ -65,23 +65,25 @@ def paired_clusters(first, second, first_setting, second_setting, seed):
     if first_setting.time_limit_ms != second_setting.time_limit_ms:
         return {"comparable": False, "reasons": ["判断時間上限が異なります。"], "difference": None,
                 "ci95": None, "independent_deals": 0, "matched_deals": []}
-    common = sorted(first.keys() & second.keys())
-    differences = []
-    matched = []
-    for deal in common:
-        a,b = first[deal],second[deal]
-        # 配札IDの一致だけでは対応比較にしない。席順・役割・相手も照合。
-        keys = lambda rows: [(r["seed"],r["rotation"],tuple(r["roles"]),r["seat"],
-                              tuple("target" if p==r['seat'] else n for p,n in enumerate(r["strategies"]))) for r in rows]
-        if keys(a) != keys(b):
-            continue
-        differences.append(float(np.mean([y["terminal_rewards"][y["seat"]]-x["terminal_rewards"][x["seat"]] for x,y in zip(a,b)])))
-        matched.append(deal)
+    samples = paired_deal_differences(first, second)
+    matched, differences = list(samples), list(samples.values())
     info = uncertainty(differences,seed)
     return {"comparable": bool(matched), "reasons": [] if matched else ["条件が一致する完全な共通配札がありません。"],
             "difference": float(np.mean(differences)) if differences else None, "ci95": info["ci95"],
             "independent_deals": len(matched), "matched_deals": matched, "uncertainty": info,
             "first_only_deals": sorted(first.keys()-set(matched)), "second_only_deals": sorted(second.keys()-set(matched))}
+
+
+def paired_deal_differences(first, second):
+    """比較条件検証済みの配札群から、役割対応を再確認してB−Aを返す。"""
+    samples = {}
+    for deal in sorted(first.keys() & second.keys()):
+        a,b = first[deal],second[deal]
+        keys = lambda rows: [(r['seed'],r['rotation'],tuple(r['roles']),r['seat'],
+                              tuple('target' if p==r['seat'] else n for p,n in enumerate(r['strategies']))) for r in rows]
+        if keys(a) == keys(b):
+            samples[deal] = float(np.mean([y['terminal_rewards'][y['seat']]-x['terminal_rewards'][x['seat']] for x,y in zip(a,b)]))
+    return samples
 
 
 def decision_sources(payload):

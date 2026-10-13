@@ -11,7 +11,8 @@ import sqlite3
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 from .arena import ArenaRequest, ArenaPlan, arena_estimate, compare_arena, PARTITIONS
-from .quality_statistics import decision_sources
+from .quality_statistics import decision_sources,complete_deals,paired_deal_differences
+from .evaluation_statistics import fixed_evidence
 from ..strategies.declarative import StrategyDefinition
 
 BASELINE = '83fc2f1fb2c79892a463d75783cbe9c46c73df62'
@@ -114,6 +115,7 @@ class Criteria(StrictModel):
 
 
 class EvolutionRequest(StrictModel):
+    multiplicity_policy: Literal['bonferroni_fixed'] = 'bonferroni_fixed'
     name: str = Field(default='戦略進化実験', min_length=1, max_length=100)
     parent: str
     children: list[str] = Field(min_length=1, max_length=4)
@@ -197,7 +199,7 @@ class Evolution:
                 seed_partition=stage, start_offset=getattr(request, stage+'_offset'), policy_seed=request.policy_seed,
                 include_expensive=request.include_expensive, timeout_seconds=request.timeout_seconds).resolve(self.definitions).model_dump(mode='json')
         settings = request.model_dump(mode='json')
-        payload = {'schema_version':1, 'assessment_version':'evolution-policy-v1', 'baseline_commit': BASELINE, 'created_at': now(), 'settings': settings, 'plans': plans,
+        payload = {'schema_version':1, 'assessment_version':'evolution-policy-v2', 'baseline_commit': BASELINE, 'created_at': now(), 'settings': settings, 'plans': plans,
                    'parent': parent.model_dump(mode='json'), 'children': [d.model_dump(mode='json') for d in children],
                    'changes': {d.reference: changes(parent, d) for d in children}}
         payload['config_hash'] = digest({k: v for k, v in payload.items() if k != 'created_at'})
@@ -216,7 +218,7 @@ class Evolution:
                 comparisons = {}
                 for setting in ArenaPlan.model_validate(result['config']).settings[1:]:
                     comparisons[setting.reference] = compare_arena(result, result, parent.identifier, setting.identifier)
-                stages[e['stage']] = {'arena_id': e['arena_id'], 'selected_children': e['children'], 'result': result, 'comparisons': comparisons}
+                stages[e['stage']] = {'arena_id': e['arena_id'], 'selected_children': e['children'], 'fresh_deals':e.get('fresh_deals'), 'result': result, 'comparisons': comparisons}
         criteria = Criteria.model_validate(raw['settings']['criteria'])
         candidates = []
         for child in raw['children']:
@@ -225,6 +227,16 @@ class Evolution:
             for stage in ('validation', 'final'):
                 if stage in stages and reference in stages[stage]['comparisons']:
                     evidence[stage] = assessment(criteria, stages[stage], reference)
+                    if raw['settings'].get('multiplicity_policy')=='bonferroni_fixed':
+                        record=stages[stage]['result'];plan=ArenaPlan.model_validate(record['config'])
+                        target=next(s for s in plan.settings if s.reference==reference)
+                        samples=paired_deal_differences(complete_deals(plan,record['results'],plan.settings[0]),complete_deals(plan,record['results'],target))
+                        corrected=fixed_evidence(samples.values(),comparisons=len(stages[stage]['selected_children']),
+                            completed=record['status']=='completed' and len(samples)==len(plan.deal_seeds),confirmatory=stages[stage]['fresh_deals'] is True)
+                        evidence[stage]['multiplicity']=corrected
+                        if corrected['decision']!='positive' or not corrected.get('interval') or corrected['interval'][0]<=criteria.min_difference:
+                            evidence[stage]['passed']=False
+                            evidence[stage]['reasons'].append('固定標本Bonferroni補正後の正の差を確認できません')
                     previous = stages.get('development' if stage=='validation' else 'validation')
                     current = stages[stage]['result']
                     if not previous or decision_sources(previous['result']) != decision_sources(current) or any(previous['result'].get(k)!=current.get(k) for k in ('rule_version','reward_version','information_condition','runner_seed_scheme')):
@@ -275,7 +287,10 @@ class Evolution:
             except Exception:
                 self.event(identifier, {'type':'stage_failed_to_start','stage':stage})
                 raise
-            self.event(identifier, {'type':'stage_started','stage':stage,'children':selected.children,'arena_id':result['id']})
+            prior_seeds=set()
+            for previous_id,payload in self.store.iter_experiments():
+                if previous_id!=result['id']:prior_seeds.update(payload.get('config',{}).get('deal_seeds',[]))
+            self.event(identifier, {'type':'stage_started','stage':stage,'children':selected.children,'arena_id':result['id'],'fresh_deals':not bool(set(plan.deal_seeds)&prior_seeds)})
             return self.get(identifier)
 
     def decide(self, identifier, request):
