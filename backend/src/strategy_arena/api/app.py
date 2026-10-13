@@ -15,6 +15,8 @@ from ..experiments.storage import ExperimentStore
 from ..game.cards import Card
 from ..game.engine import Game
 from ..game.rules import RULE_VERSION
+from ..game.rewards import REWARD_VERSION, terminal_rewards
+from ..experiments.evaluation import enrich_payload
 from ..strategies.registry import create_strategy, strategy_names
 from ..strategies.registry import algorithm_catalog
 from ..strategies.base import Decision, decide, decision_record
@@ -115,6 +117,8 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
                 visible.append(record)
             decisions.append(visible)
         return {"observation": asdict(game.observe(0)), "finished": game.finished,
+                "terminal_rewards": terminal_rewards(game.winners) if game.finished else None,
+                "reward_version": REWARD_VERSION,
                 "winners": game.winners, "strategies": session["names"],
                 "decisions": decisions, "rule_version": RULE_VERSION,
                 "strategy_versions": session["versions"], "capture_details": session["capture_details"],
@@ -264,7 +268,9 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
                    "strategy_versions": {name: create_strategy(name).version for name in config.strategies},
                    "information_condition": config.information_condition,
                    "strategy_parameters": {},
-                   "python": platform.python_version(), "results": results, "summary": summarize(results)}
+                   "python": platform.python_version(), "results": results, "summary": summarize(results),
+                   "reward_version": REWARD_VERSION, "result_schema_version": 2}
+        payload = enrich_payload(payload)
         identifier = store.save(payload)
         return {"id": identifier, **payload}
 
@@ -273,7 +279,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         payload = store.get(identifier)
         if payload is None:
             raise HTTPException(404, "実験が見つかりません")
-        return {"id": identifier, **payload}
+        return {"id": identifier, **enrich_payload(payload)}
 
     return app
 

@@ -8,6 +8,7 @@ from time import perf_counter
 from .runner import run_experiment
 from .metrics import summarize
 from ..game.rules import RULE_VERSION
+from ..game.rewards import REWARD_VERSION
 from ..strategies.registry import create_strategy, strategy_names
 
 
@@ -24,6 +25,7 @@ def main():
     start = perf_counter()
     results = run_experiment(list(range(args.seed, args.seed + args.deals)), tuple(args.strategies), capture_details=args.capture_details)
     payload = {"rule_version": RULE_VERSION, "information_condition": "imperfect",
+               "reward_version": REWARD_VERSION, "result_schema_version": 2,
                "config": {"seed": args.seed, "deals": args.deals, "strategies": args.strategies, "rotate": True, "capture_details": args.capture_details},
                "strategy_parameters": {},
                "strategy_versions": {name: create_strategy(name).version for name in args.strategies},
@@ -33,7 +35,9 @@ def main():
     elapsed = perf_counter() - start
     print(f"{len(results)}試合 / {elapsed:.2f}秒 / {len(results)/elapsed:.1f}試合/秒")
     for name, metric in payload["summary"]["strategies"].items():
-        print(f"{name}: 勝率 {metric['win_rate']:.1%}, ターン獲得率 {metric['turn_win_rate']:.1%}")
+        print(f"{name}: 勝率 {metric['win_rate']:.1%}, 単独 {metric['sole_win_rate']:.1%}, "
+              f"共同 {metric['joint_win_rate']:.1%}, 平均累計 {metric['average_score']:.2f}, "
+              f"平均終局報酬 {metric['average_terminal_reward']:.2f}, ターン獲得率 {metric['turn_win_rate']:.1%}")
 
 
 if __name__ == "__main__":

@@ -2,6 +2,7 @@ from collections import defaultdict
 from math import sqrt
 
 import numpy as np
+from .evaluation import evaluation_metrics
 
 
 def wilson(wins: int, count: int) -> tuple[float, float]:
@@ -17,8 +18,10 @@ def wilson(wins: int, count: int) -> tuple[float, float]:
 
 def summarize(results: list[dict]) -> dict:
     rows = defaultdict(list)
+    evaluation_rows = defaultdict(list)
     for game in results:
         for p, name in enumerate(game["strategies"]):
+            evaluation_rows[name].append((game, p))
             rows[name].append({"seed": game["seed"], "seat": p,
                                "win": int(p in game["winners"]),
                                "score": game["scores"][p], "turns": game["turn_wins"][p],
@@ -36,6 +39,7 @@ def summarize(results: list[dict]) -> dict:
             boot = np.array([rng.choice(means, size=len(means), replace=True).mean() for _ in range(1000)])
             ci = [float(x) for x in np.quantile(boot, [0.025, 0.975])]
         summary[name] = {
+            **evaluation_metrics(evaluation_rows[name]),
             "games": len(samples), "wins": sum(r["win"] for r in samples),
             "win_rate": float(np.mean([r["win"] for r in samples])),
             "ci95": ci, "independent_deals": len(means),

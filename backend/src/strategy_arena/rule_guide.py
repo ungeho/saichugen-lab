@@ -2,9 +2,11 @@
 from dataclasses import asdict
 from .game.cards import Card, deck
 from .game.engine import Game
+from .game.rewards import REWARD_VERSION, terminal_rewards
 from .game.rules import RULE_VERSION, ROUNDS_PER_GAME, TURNS_PER_ROUND, turn_winner, round_awards, median_players
 
 SOURCES = [
+    {"id": "study2003", "name": "副田俊介・田中哲朗「最中限の終盤の分析」（2003）", "url": "https://ipsj.ixsq.nii.ac.jp/record/58572/files/IPSJ-GI03010005.pdf", "location": "紙面32 §3.2(5)–(6)、紙面33 表2。研究対象規則の一次記述であり、竹内氏の原典全文ではありません。", "status": "研究論文本文で確認"},
     {"id": "implementation", "name": "現行ゲームエンジン", "url": None, "location": "game/engine.py の Game.winners", "status": "現行実装・原典未確認"},
     {"id": "gpcc", "name": "GPCC報告（2009年）", "url": "https://prosym.org/gpcc/files/gpcc09.pdf",
      "location": "1ページ「1 2009年の課題」最中限の段落", "status": "GPCC一次資料で確認"},
@@ -28,7 +30,8 @@ RULES = [
     ("round", "ラウンドからゲーム得点へ", "3ターンのラウンド得点を比べ、中間の人だけが自分のラウンド得点をゲーム得点へ加算します。他の人には加算しません。その後、全員のラウンド得点を0に戻します。ゲーム得点は次のラウンドに持ち越します。", "gpcc", "round_awards / Game.play"),
     ("ties", "得点の同点・共同勝利", "ラウンドと最終ゲームでは、3人の得点を並べた中央の値と同点の全員が勝者です。2人同点ならその2人、全員同点なら3人とも勝者。勝利を分割する追加の引き分け判定はありません。0点でラウンドに勝ってもゲーム得点の増加は0です。", "secondary", "median_players / round_awards / Game.winners"),
     ("finish", "終了と最終判定", "15ターンで終了し、以降は残り2枚を出せません。ゲーム得点が中間の全員を最終勝者として返します。終局時の追加処理は下の「終局での得点保持」を参照してください。", "gpcc", "Game.finished / Game.winners"),
-    ("final_storage", "終局での得点保持", "現在は5ラウンド合計をそのまま保持し、勝者を判定します。終局時に得点を再配分しません。二次資料の終局の得点表現の詳細は原典で未照合です。", "implementation", "Game.winners / Game.observe"),
+    ("final_storage", "終局での得点保持", "5ラウンド合計を保持し、勝者を判定します。その後、2003年論文表2の終局報酬を別に計算します。累計への加算・勝者の再判定はしません。原案全文との一致は未確認です。", "implementation", "Game.winners / Game.observe"),
+    ("terminal_reward", "終局報酬は別の評価指標", "単独勝者は+2、敗者各−1。2人共同勝利は各+1、敗者−2。全員勝利は全員0。3人合計は必ず0です。勝者確定後に計算し、累計得点には加算しません。戦略の判断基準も変更しません。", "study2003", "game/rewards.py: terminal_rewards"),
     ("visibility", "知ることのできる情報", "自分の手札、全員提出後に同時公開された3枚と全履歴、公開得点、進行位置、各人の残り枚数を観測できます。相手の未公開手札・余り1枚・配札シード・未公開の提出札はStrategyへ渡しません。終局の残り手札も通常APIでは非公開です。", "approved", "Observation / Game.observe"),
     ("analysis", "終局後の分析表示", "終了後に明示的な分析表示を開くと、他席の当時の判断ログ・候補手札や履歴局面の視点を確認できます。これは閲覧用の拡張で、対戦中のStrategyの観測条件は変わりません。研究用完全リプレイは別経路です。", "approved", "API.view / check_comparison_player / research.replay"),
 ]
@@ -82,12 +85,15 @@ def rule_guide():
                     (Card(1, 0), Card(13, 0), Card(2, 0)),
                     (Card(1, 1), Card(13, 1), Card(4, 0)),
                     (Card(1, 2), Card(13, 2), Card(6, 0))))],
-            "final_examples": [{"scores": scores, "winners": median_players(scores)} for scores in
+            "final_examples": [{"scores": scores, "winners": median_players(scores), "terminal_rewards": terminal_rewards(median_players(scores))} for scores in
                                ((10, 25, 40), (10, 10, 4), (0, 0, 12), (6, 6, 6))],
+            "reward": {"version": REWARD_VERSION, "source": "study2003",
+                       "table": [{"winners": len(w), "winner_reward": terminal_rewards(w)[0], "loser_reward": terminal_rewards(w)[2] if len(w) < 3 else 0} for w in ((0,), (0,1), (0,1,2))],
+                       "note": "2003年論文の紙面32–33、表2を採用。2021年論文のルール節はこの終局報酬を省略しています。廃止の証拠ではなく、原案との完全一致も未確認です。"},
             "uncertainties": [
                 "原典全文との一致は未確認。『原典で確認済み』と断定できる項目はありません。",
                 "GPCC資料と二次資料の共通記述に矛盾は見つかりませんでした。GPCCに記載のないカード順序・同点・公開手順を二次資料や承認済み仮仕様で補っています。異なるルールセットかどうかは未確認です。",
-                "二次資料の終局の『勝者はその得点総計を得ます』という表現について、追加の得点管理は原典で未照合。現在は5ラウンド合計を保持して勝者だけを判定します。",
+                "二次資料の終局表現と2003年論文の終局報酬の対応、原案での採用は未確認。終局報酬はプロジェクトで明示的に採用した独立指標です。",
                 "最初の依頼にあった17トリック・スートフォロー・固定3点・総得点51は採用していません。"],
             "examples_origin": "ターン例はturn_winner、ラウンド例はGame.play、最終例はmedian_playersで表示時に計算しています。"}
 

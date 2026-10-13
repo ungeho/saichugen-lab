@@ -2,6 +2,8 @@
 
 from collections import Counter
 import json
+from .evaluation import evaluation_metrics, evaluated_result
+from ..game.rewards import terminal_rewards
 
 
 def algorithm_statistics(name: str, experiments) -> dict:
@@ -22,6 +24,7 @@ def algorithm_statistics(name: str, experiments) -> dict:
                 names = row["strategies"]
                 if len(names) != 3 or len(row["scores"]) != 3 or any(p not in (0, 1, 2) for p in row["winners"]):
                     raise ValueError("結果形式不正")
+                terminal_rewards(row["winners"])
                 if any(n not in versions or not versions[n] for n in names):
                     raise ValueError("バージョン不足")
         except (KeyError, TypeError, ValueError):
@@ -32,14 +35,17 @@ def algorithm_statistics(name: str, experiments) -> dict:
                 if participant != name:
                     continue
                 opponents = sorted((n, str(versions[n])) for q, n in enumerate(row["strategies"]) if q != p)
-                key = (rule, condition, str(versions[name]), tuple(opponents), settings)
+                evaluation = evaluated_result(row, rule, payload.get("reward_version"))
+                reward_condition = evaluation.get("reward_version")
+                key = (rule, condition, str(versions[name]), tuple(opponents), settings, reward_condition)
                 if key not in groups:
                     groups[key] = {"rule_version": rule, "information_condition": condition,
                                    "strategy_version": str(versions[name]), "parameters": parameters,
                                    "opponents": [{"name": n, "version": v} for n, v in opponents],
-                                   "scores": [], "wins": 0, "matches": set(), "experiment_ids": set()}
+                                   "scores": [], "evaluation_samples": [], "wins": 0, "matches": set(), "experiment_ids": set()}
                 group = groups[key]
                 group["scores"].append(row["scores"][p])
+                group["evaluation_samples"].append((evaluation, p))
                 group["wins"] += int(p in row["winners"])
                 group["matches"].add((identifier, index))
                 group["experiment_ids"].add(identifier)
@@ -47,10 +53,11 @@ def algorithm_statistics(name: str, experiments) -> dict:
     for group in groups.values():
         scores = group["scores"]
         counts = Counter(scores)
-        output.append({**{k: v for k, v in group.items() if k not in ("scores", "matches", "experiment_ids")},
+        output.append({**{k: v for k, v in group.items() if k not in ("scores", "matches", "experiment_ids", "evaluation_samples")},
+                       **evaluation_metrics(group["evaluation_samples"], group["rule_version"]),
                        "participations": len(scores), "match_count": len(group["matches"]),
                        "experiment_ids": sorted(group["experiment_ids"]),
                        "win_rate": group["wins"] / len(scores), "average_score": sum(scores) / len(scores),
                        "score_distribution": [{"score": score, "count": count} for score, count in sorted(counts.items())]})
     return {"name": name, "groups": output, "unclassified_experiments": unclassified,
-            "note": "ルール・情報条件・全員のバージョン・相手構成・記録済み設定ごとに集計。再実行して保存した試合も含みます。共同勝利は各人1勝です。"}
+            "note": "ルール・情報条件・全員の戦略版・報酬版・相手構成・記録済み設定ごとに集計。再実行して保存した試合も含みます。共同勝利は各人1勝です。"}

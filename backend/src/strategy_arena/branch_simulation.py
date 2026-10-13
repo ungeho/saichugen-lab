@@ -11,6 +11,7 @@ from .comparison import clone_strategy
 from .experiments.metrics import wilson
 from .experiments.runner import derived_seed
 from .game.engine import Game
+from .game.rewards import REWARD_VERSION, terminal_rewards
 from .inference import UniformSampler
 from .strategies.base import decide
 from .strategies.registry import create_strategy
@@ -31,10 +32,30 @@ def aggregate(card, outcomes):
     count = len(scores)
     wins = sum(row["win"] for row in outcomes)
     mean = sum(scores) / count
+    rewards = [row["reward"] for row in outcomes if "reward" in row]
+    complete = all("sole_win" in row and "joint_win" in row for row in outcomes)
     return {"card": asdict(card), "trials": count, "wins": wins, "win_rate": wins / count,
+            "sole_win_rate": sum(row["sole_win"] for row in outcomes) / count if complete else None,
+            "joint_win_rate": sum(row["joint_win"] for row in outcomes) / count if complete else None,
+            "average_terminal_reward": sum(rewards) / len(rewards) if rewards else None,
             "ci95": wilson(wins, count), "average_score": mean,
             "score_std": math.sqrt(sum((s - mean) ** 2 for s in scores) / count),
             "rank_distribution": dict(Counter(row["rank"] for row in outcomes))}
+
+
+def paired_reward_statistics(first, second):
+    if len(first) != len(second) or not first:
+        raise ValueError("対応する非空の報酬標本が必要です")
+    differences = [a - b for a, b in zip(first, second)]
+    count = len(differences)
+    mean = sum(differences) / count
+    ci = None
+    if count > 1:
+        se = math.sqrt(sum((d - mean) ** 2 for d in differences) / (count - 1) / count)
+        ci = [max(-4, mean - 1.96 * se), min(4, mean + 1.96 * se)]
+    return {"average_terminal_reward_difference": mean, "reward_difference_ci95": ci,
+            "reward_difference_samples": count,
+            "reward_difference_zero_variance": count > 1 and len(set(differences)) == 1}
 
 def simulate(observation, position, cards, names, trials, seed, check=lambda: None, progress=lambda n: None):
     templates = [create_strategy(name) for name in names]
@@ -66,7 +87,12 @@ def simulate(observation, position, cards, names, trials, seed, check=lambda: No
             best = 1 + sum(s > score for s in scores)
             worst = 3 - sum(s < score for s in scores)
             rank = str(best) if best == worst else f"{best}–{worst}"
-            outcomes[index].append({"score": score, "win": int(observation.player in game.winners), "rank": rank})
+            winners = game.winners
+            won = observation.player in winners
+            outcomes[index].append({"score": score, "win": int(won), "rank": rank,
+                                    "sole_win": int(won and len(winners) == 1),
+                                    "joint_win": int(won and len(winners) > 1),
+                                    "reward": terminal_rewards(winners)[observation.player]})
         progress(trial + 1)
     paired = []
     for i in range(len(cards)):
@@ -75,9 +101,10 @@ def simulate(observation, position, cards, names, trials, seed, check=lambda: No
             mean = sum(differences) / trials
             se = math.sqrt(sum((d - mean) ** 2 for d in differences) / (trials - 1) / trials) if trials > 1 else None
             paired.append({"a": asdict(cards[i]), "b": asdict(cards[j]), "win_rate_difference": mean,
+                           **paired_reward_statistics([r["reward"] for r in outcomes[i]], [r["reward"] for r in outcomes[j]]),
                            "ci95": [max(-1, mean - 1.96 * se), min(1, mean + 1.96 * se)] if se is not None else None,
                            "average_score_difference": sum(a["score"] - b["score"] for a, b in zip(outcomes[i], outcomes[j])) / trials})
-    return {"schema_version": 1, "position": position, "seed": seed, "trials": trials,
+    return {"schema_version": 2, "reward_version": REWARD_VERSION, "position": position, "seed": seed, "trials": trials,
             "continuation": [{"name": name, "version": version} for name, version in zip(names, versions)],
             "state_policy": "registered_initial_v1", "sampler": "uniform-unseen-v1", "information_condition": "imperfect",
             "sampling_note": "自分の手札と公開履歴を固定し、未公開カードを残り枚数に従って一様に配分。過去の選択傾向による重み付けは行いません。",

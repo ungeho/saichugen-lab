@@ -4,15 +4,38 @@ __pycache__/
 node_modules/
 dist/
 *.sqlite3
+*.sqlite
 artifacts/
 .tools/
 .dev-state/
 .uv-cache/
 .pnpm-store/
-.test-tmp/
-.test-tmp-api/
-.test-tmp-final/
 test-results/
 playwright-report/
 *.tsbuildinfo
-.test-tmp-branch*/
+# pytest等のローカル一時ディレクトリ（拡張子.sqliteも含む）
+.test-tmp*/
+
+# 取得した第三者資料・調査用の一時ファイル
+/research-local/
+
+# 既存の調査フォルダにある取得資料・個人用監査データ
+# 自作Markdownや、docs/等の自作図表は引き続き管理する
+/research_notes/**/IPSJ-*.pdf
+/research_notes/**/IPSJ-*.txt
+/research_notes/**/soeda-*.png
+/research_notes/**/baseline-hashes.json
+/research_notes/**/baseline-status.txt
+
+# ローカル設定。公開用サンプルには実際の秘密値を入れない
+.env
+.env.*
+!.env.example
+
+# SQLiteが生成する補助ファイル
+*.sqlite3-wal
+*.sqlite3-shm
+*.sqlite-wal
+*.sqlite-shm
+*.sqlite3-journal
+*.sqlite-journal

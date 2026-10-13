@@ -28,6 +28,7 @@ test('共通配札の比較実験とグラフ',async({page})=>{
  await page.getByRole('button',{name:'比較実験を実行'}).click();
  await expect(page.locator('.metrics .panel')).toHaveCount(3);
  await expect(page.getByText('18 試合', {exact:false})).toBeVisible();
- await expect(page.locator('.chart canvas')).toHaveCount(4);
+ await expect(page.locator('.chart canvas')).toHaveCount(5);
+ await expect(page.getByRole('img',{name:'戦略別平均終局報酬',exact:true})).toBeVisible();
  await page.screenshot({path:'test-results/experiments-desktop.png',fullPage:true});
 });

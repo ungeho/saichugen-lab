@@ -4,6 +4,7 @@ from random import Random
 from time import perf_counter_ns
 
 from ..game.engine import Game
+from ..game.rewards import REWARD_VERSION, terminal_rewards
 from ..strategies.registry import create_strategy
 from ..strategies.base import decide, decision_record
 
@@ -52,6 +53,8 @@ def run_experiment(seeds: list[int], names: tuple[str, str, str], rotate: bool =
             obs = game.observe(0)
             results.append({"seed": seed, "strategies": assignment,
                             "scores": obs.game_scores, "winners": game.winners,
+                            "terminal_rewards": terminal_rewards(game.winners),
+                            "reward_version": REWARD_VERSION, "reward_source": "recorded",
                             "turn_wins": tuple(sum(t.winner == p for t in obs.history) for p in range(3)),
                             "elapsed_ns": times})
             if capture_details:

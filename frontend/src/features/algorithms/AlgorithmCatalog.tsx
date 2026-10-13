@@ -1,4 +1,5 @@
 import {useEffect,useState} from 'react';
+import {metricValue,metricPercent} from '../../evaluation';
 import {Button} from '../../components/ui/button';
 import {api,type Algorithm,type AlgorithmStatistics} from '../../model';
 
@@ -14,8 +15,8 @@ function Statistics({name}:{name:string}){
       <p className="muted">{data.note}</p>
       {data.groups.length===0?<div className="empty">この戦略の集計可能な保存結果はありません。「比較実験」で対戦すると、ここに条件別の成績が表示されます。</div>:data.groups.map((group,i)=><article className="stat-group" key={i}>
         <div className="stat-conditions"><b>{name} v{group.strategy_version}</b><span>相手: {group.opponents.map(p=>`${p.name} v${p.version}`).join(' / ')}</span><span>ルール: {group.rule_version}</span><span>情報条件: {group.information_condition==='imperfect'?'不完全情報':group.information_condition}</span><span>設定の記録: {group.parameters===null?'未記録':Object.keys(group.parameters).length===0?'既定値（追加パラメータなし）':JSON.stringify(group.parameters)}</span></div>
-        <dl className="stat-numbers"><div><dt>対戦回数</dt><dd>{group.match_count}</dd></div><div><dt>参加回数（席数）</dt><dd>{group.participations}</dd></div><div><dt>勝率</dt><dd>{(group.win_rate*100).toFixed(1)}%</dd></div><div><dt>平均ゲーム得点</dt><dd>{group.average_score.toFixed(2)}</dd></div></dl>
-        <details><summary>得点分布・記録条件を見る</summary><div className="distribution">{group.score_distribution.map(row=><span key={row.score}>{row.score}点: {row.count}回</span>)}</div><p className="muted">設定: {group.parameters===null?'未記録（記録済みの設定と分けて集計）':JSON.stringify(group.parameters)}<br/>保存実験数: {group.experiment_ids.length}</p></details>
+        <dl className="stat-numbers"><div><dt>対戦回数</dt><dd>{group.match_count}</dd></div><div><dt>参加回数（席数）</dt><dd>{group.participations}</dd></div><div><dt>勝率</dt><dd>{(group.win_rate*100).toFixed(1)}%</dd></div><div><dt>単独勝利率</dt><dd>{metricPercent(group.sole_win_rate)}</dd></div><div><dt>共同勝利率</dt><dd>{metricPercent(group.joint_win_rate)}</dd></div><div><dt>平均累計得点</dt><dd>{metricValue(group.average_score)}</dd></div><div><dt>平均終局報酬</dt><dd>{metricValue(group.average_terminal_reward)}</dd></div></dl>
+        <p className="muted">報酬版: {group.reward_version??'不明'} · 報酬算出可能 {group.reward_games??0} / {group.participations}参加 · 不明 {group.reward_unknown_games??group.participations}参加<br/>新形式 {group.reward_sources?.recorded??0} / 旧結果から補完 {group.reward_sources?.derived_from_winners??0}。不明値は平均に含めません。</p><details><summary>得点分布・記録条件を見る</summary><div className="distribution">{group.score_distribution.map(row=><span key={row.score}>{row.score}点: {row.count}回</span>)}</div><p className="muted">設定: {group.parameters===null?'未記録（記録済みの設定と分けて集計）':JSON.stringify(group.parameters)}<br/>保存実験数: {group.experiment_ids.length}</p></details>
       </article>)}
       {data.unclassified_experiments>0&&<p className="muted">全保存実験のうち{data.unclassified_experiments}件は条件・バージョン等の記録不足のため集計に含めていません。</p>}
     </>}
