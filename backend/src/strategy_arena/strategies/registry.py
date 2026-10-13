@@ -51,3 +51,8 @@ def configured_parameters(names) -> dict:
 from .monte_carlo import MonteCarloRollout, DESCRIPTION
 
 register(MonteCarloRollout.name, MonteCarloRollout, DESCRIPTION)
+
+from .hybrid import HybridSearch, METHOD_NAMES, description
+
+for method, name in METHOD_NAMES.items():
+    register(name, lambda m=method: HybridSearch(m), description(method))

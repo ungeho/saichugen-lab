@@ -26,6 +26,7 @@ def uncertainty(values, seed):
 
 
 def complete_deals(config, rows, setting):
+    from .rollout_quality import Setting
     grouped = defaultdict(list)
     for row in rows:
         if row.get("setting") == setting.identifier:
@@ -38,12 +39,12 @@ def complete_deals(config, rows, setting):
             for row in group:
                 seed, rotation = row["seed"], row["rotation"]
                 roles = ROTATIONS[rotation]
-                names = tuple("monte_carlo_rollout" if role == 0 else config.opponents[role-1] for role in roles)
+                names = tuple(setting.strategy_name if role == 0 else config.opponents[role-1] for role in roles)
                 if (type(seed) is not int or seed not in config.deal_seeds or deal != str(seed)
                         or type(rotation) is not int or tuple(row["roles"]) != roles
                         or type(row["seat"]) is not int or row["seat"] != roles.index(0)
                         or tuple(row["strategies"]) != names
-                        or row["rollout_parameters"] != setting.model_dump()
+                        or Setting.model_validate(row["rollout_parameters"]).model_dump() != setting.model_dump()
                         or row["strategy_version"] != "1"
                         or any(type(v) is not int for v in row["terminal_rewards"])
                         or tuple(row["terminal_rewards"]) != terminal_rewards(row["winners"])):
@@ -55,6 +56,12 @@ def complete_deals(config, rows, setting):
 
 
 def paired_clusters(first, second, first_setting, second_setting, seed):
+    if ((first_setting.method=="legacy") != (second_setting.method=="legacy")
+            or first_setting.total_budget != second_setting.total_budget
+            or first_setting.min_trials != second_setting.min_trials
+            or (first_setting.method!="legacy" and first_setting.continuation!=second_setting.continuation)):
+        return {"comparable":False,"reasons":["総予算・最低試行・予算方式・継続条件が一致しません。"],
+                "difference":None,"ci95":None,"independent_deals":0,"matched_deals":[]}
     if first_setting.time_limit_ms != second_setting.time_limit_ms:
         return {"comparable": False, "reasons": ["判断時間上限が異なります。"], "difference": None,
                 "ci95": None, "independent_deals": 0, "matched_deals": []}
@@ -64,7 +71,8 @@ def paired_clusters(first, second, first_setting, second_setting, seed):
     for deal in common:
         a,b = first[deal],second[deal]
         # 配札IDの一致だけでは対応比較にしない。席順・役割・相手も照合。
-        keys = lambda rows: [(r["seed"],r["rotation"],tuple(r["roles"]),r["seat"],tuple(r["strategies"])) for r in rows]
+        keys = lambda rows: [(r["seed"],r["rotation"],tuple(r["roles"]),r["seat"],
+                              tuple("target" if p==r['seat'] else n for p,n in enumerate(r["strategies"]))) for r in rows]
         if keys(a) != keys(b):
             continue
         differences.append(float(np.mean([y["terminal_rewards"][y["seat"]]-x["terminal_rewards"][x["seat"]] for x,y in zip(a,b)])))
@@ -100,6 +108,8 @@ def compare_saved(first, second, first_name, second_name):
         if x != y or x is None: reasons.append(name+"が一致しません。")
     sources_a,sources_b=decision_sources(first),decision_sources(second)
     required={"game/engine.py","game/rules.py","strategies/monte_carlo.py","strategies/baselines.py","rollouts.py","inference.py","experiments/runner.py","experiments/rollout_quality.py"}
+    if left.method!="legacy" or right.method!="legacy":
+        required.update(("strategies/hybrid.py","strategies/registry.py"))
     if not required <= sources_a.keys() or not required <= sources_b.keys() or sources_a != sources_b:
         reasons.append("対局・戦略ソースのfingerprintが一致しないか未記録です。")
     context = {"first_opponents": a.opponents, "second_opponents": b.opponents,

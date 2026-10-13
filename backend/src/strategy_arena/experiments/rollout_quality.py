@@ -10,6 +10,7 @@ import json
 import os
 import platform
 import subprocess
+from typing import Literal
 
 import numpy as np
 from pydantic import BaseModel, ConfigDict, Field, StrictInt, field_validator, model_validator
@@ -21,8 +22,10 @@ from ..game.rewards import REWARD_VERSION, terminal_rewards
 from ..strategies.base import Decision
 from ..strategies.baselines import NAMES, Baseline
 from ..strategies.monte_carlo import MonteCarloRollout
+from ..strategies.hybrid import HybridSearch, METHOD_NAMES
 
-BASELINE_COMMIT = "600be06469e789395257d00afdbc11d039369869"
+BASELINE_COMMIT = "0216601af12936805af91a8dccf11a45c5d36f1d"
+PHASE17_BASELINE = "600be06469e789395257d00afdbc11d039369869"
 LEGACY_BASELINE = "8b380bec5e85f6368f7aa2f1c49db818f3abb160"
 KIND = "rollout_quality_v1"
 ROTATIONS = tuple(permutations(range(3)))
@@ -30,7 +33,10 @@ ROTATIONS = tuple(permutations(range(3)))
 
 class Setting(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    trials: int = Field(strict=True, ge=1, le=64)
+    trials: int = Field(default=8, strict=True, ge=1, le=64)
+    method: Literal["legacy","uniform","heuristic","adaptive","combined"] = "legacy"
+    total_budget: int | None = Field(default=None, strict=True, ge=1, le=1024)
+    min_trials: int = Field(default=1, strict=True, ge=1, le=8)
     continuation: str = "Random"
     time_limit_ms: float | None = Field(default=None, strict=True, ge=0, le=5000, allow_inf_nan=False)
 
@@ -43,7 +49,29 @@ class Setting(BaseModel):
 
     @property
     def identifier(self):
+        if self.method != "legacy":
+            return f"{self.method}/{self.total_budget}/{self.continuation}/{self.time_limit_ms}/min{self.min_trials}"
         return f"{self.trials}/{self.continuation}/{self.time_limit_ms}"
+
+    @model_validator(mode="after")
+    def budget_mode(self):
+        if (self.method=="legacy") != (self.total_budget is None):
+            raise ValueError("総予算方式にはtotal_budgetが必須。従来方式には指定できません")
+        if self.method=="legacy" and self.min_trials!=1:
+            raise ValueError("従来方式はmin_trials設定に非対応です")
+        if self.method!="legacy" and self.trials!=8:
+            raise ValueError("総予算方式に候補あたりtrialsは適用しません。既定8のままにしてください")
+        return self
+
+    @property
+    def strategy_name(self):
+        return "monte_carlo_rollout" if self.method=="legacy" else METHOD_NAMES[self.method]
+
+    def create_strategy(self):
+        if self.method=="legacy":
+            return MonteCarloRollout(self.trials,self.continuation,time_limit_ms=self.time_limit_ms)
+        return HybridSearch(self.method,self.total_budget,self.continuation,
+                            time_limit_ms=self.time_limit_ms,min_trials=self.min_trials)
 
 
 class StudyConfig(BaseModel):
@@ -59,7 +87,7 @@ class StudyConfig(BaseModel):
 
     @model_validator(mode="after")
     def safe_plan(self):
-        if self.baseline_commit not in (BASELINE_COMMIT, LEGACY_BASELINE):
+        if self.baseline_commit not in (BASELINE_COMMIT, PHASE17_BASELINE, LEGACY_BASELINE):
             raise ValueError("既知の確定基準SHAと一致しません")
         if len(set(self.deal_seeds)) != len(self.deal_seeds) or any(not 0 <= s <= 9007199254740991 for s in self.deal_seeds):
             # Python Randomの整数seedは符号で同じ配札になり得るため非負に限定。
@@ -70,6 +98,11 @@ class StudyConfig(BaseModel):
             raise ValueError("重複した設定です")
         if estimate(self)["games"] > 360 or estimate(self)["rollout_upper_bound"] > 500000:
             raise ValueError("最大360対局・概算50万Rollout以内で段階実行してください")
+        modes={s.method=="legacy" for s in self.settings}
+        if len(modes)>1:
+            raise ValueError("候補あたり試行数と総予算方式は同一実験に混在できません")
+        if False in modes and len({(s.total_budget,s.min_trials,s.continuation,s.time_limit_ms) for s in self.settings})!=1:
+            raise ValueError("総予算の方式比較では予算・最低試行・継続戦略・時間上限を揃えてください")
         return self
 
 
@@ -79,15 +112,15 @@ def estimate(config, historical=()):
     # 17+16+...+3=150候補/対局。プローブは5候補×設定試行数。
     return {"games": games, "independent_deals": len(config.deal_seeds), "rotations": 6,
             "settings_count":len(config.settings), **resource_plan(config,historical),
-            "rollout_upper_bound": 6*len(config.deal_seeds)*150*sum(s.trials for s in config.settings)
-                + (5*sum(s.trials for s in config.settings) if config.analyze_position else 0),
+            "rollout_upper_bound": 6*len(config.deal_seeds)*sum(150*s.trials if s.method=="legacy" else 15*s.total_budget for s in config.settings)
+                + (sum(5*s.trials if s.method=="legacy" else s.total_budget for s in config.settings) if config.analyze_position else 0),
             "note": "候補数×試行数の上限見積もり。継続戦略・残りターンで処理時間は変わります。"}
 
 
 def presets():
     directory = Path(__file__).resolve().parents[4] / "experiments" / "presets"
     return [{"id": p.stem, "config": StudyConfig.model_validate_json(p.read_text(encoding="utf-8")).model_dump()}
-            for p in sorted(directory.glob("rollout-*.json"), key=lambda p:(0 if p.stem=="rollout-phase18-stage1-random" else 1 if "phase18-stage1" in p.stem else 3 if "phase18-stage2" in p.stem else 2,p.stem))]
+            for p in sorted(directory.glob("rollout-*.json"), key=lambda p:(-1 if "phase19" in p.stem else 0 if p.stem=="rollout-phase18-stage1-random" else 1 if "phase18-stage1" in p.stem else 3 if "phase18-stage2" in p.stem else 2,p.stem))]
 
 
 def runtime_info():
@@ -110,7 +143,8 @@ class MeasuredRollout:
     version = "1"
 
     def __init__(self, setting):
-        self.strategy = MonteCarloRollout(**setting.model_dump())
+        self.strategy = setting.create_strategy()
+        self.name, self.version = self.strategy.name, self.strategy.version
         self.samples = []
 
     def choose(self, observation, rng):
@@ -120,7 +154,9 @@ class MeasuredRollout:
         meta = decision.details.optional_metadata
         self.samples.append({"elapsed_ns": elapsed, "started_rollouts": meta["started_games"],
                              "executed_rollouts": meta["executed_games"], "accepted_rollouts": meta["completed_games"],
-                             "timed_out": meta["timed_out"]})
+                             "timed_out": meta["timed_out"],
+                             "total_budget":meta.get("total_budget"),"unused_budget":meta.get("unused_budget"),
+                             "heuristic_ns":int(meta.get("heuristic_ms",0)*1e6),"allocation_ns":int(meta.get("allocation_ms",0)*1e6)})
         return replace(decision, details=None)
 
 
@@ -135,11 +171,12 @@ def probe(config, check):
     choices = []
     for setting in config.settings:
         check()
-        decision = MonteCarloRollout(**setting.model_dump()).choose_detailed(observation, Random(seed))
+        decision = setting.create_strategy().choose_detailed(observation, Random(seed))
         check()
         choices.append({"setting": setting.identifier, "parameters": setting.model_dump(),
                         "selected_card": asdict(decision.card), "candidates": [asdict(c) for c in decision.details.candidates],
-                        "seed": decision.details.optional_metadata["seed"]})
+                        "seed": decision.details.optional_metadata["seed"],
+                        **({"search_metadata":decision.details.optional_metadata} if setting.method!="legacy" else {})})
     return {"snapshot_id": snapshot, "observation": serialized, "choices": choices,
             "changed": len({json.dumps(c["selected_card"], sort_keys=True) for c in choices}) > 1,
             "generation": "最初の配札で全席が先頭合法札を12回出した共通局面。実対戦の局面ではありません。"}
@@ -214,6 +251,9 @@ def summarize_study(config, rows, partial_games=()):
             "executed_rollouts": sum(d["executed_rollouts"] for r in costs for d in r["decisions"]),
             "accepted_rollouts": sum(d["accepted_rollouts"] for r in costs for d in r["decisions"]),
             "timeout_decisions": sum(d["timed_out"] for r in costs for d in r["decisions"])})
+        summaries[-1].update({"heuristic_ms_mean":mean([d.get("heuristic_ns",0)/1e6 for r in costs for d in r["decisions"]]),
+            "allocation_ms_mean":mean([d.get("allocation_ns",0)/1e6 for r in costs for d in r["decisions"]]),
+            "unused_budget":sum(d.get("unused_budget") or 0 for r in costs for d in r["decisions"])})
     baseline = config.settings[0].identifier
     differences = []
     for setting in config.settings[1:]:

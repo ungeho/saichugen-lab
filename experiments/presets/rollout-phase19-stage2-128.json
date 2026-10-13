@@ -1,0 +1,37 @@
+{
+  "baseline_commit": "0216601af12936805af91a8dccf11a45c5d36f1d",
+  "name": "Phase19 Hybrid / stage2-128",
+  "deal_seeds": [
+    0,
+    1
+  ],
+  "policy_seed": 42,
+  "opponents": [
+    "Random",
+    "Heuristic"
+  ],
+  "settings": [
+    {
+      "method": "uniform",
+      "total_budget": 128,
+      "continuation": "Random"
+    },
+    {
+      "method": "heuristic",
+      "total_budget": 128,
+      "continuation": "Random"
+    },
+    {
+      "method": "adaptive",
+      "total_budget": 128,
+      "continuation": "Random"
+    },
+    {
+      "method": "combined",
+      "total_budget": 128,
+      "continuation": "Random"
+    }
+  ],
+  "analyze_position": true,
+  "timeout_seconds": 180
+}

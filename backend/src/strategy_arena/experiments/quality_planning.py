@@ -31,15 +31,16 @@ def resource_plan(config, historical=()):
                     or decision_sources(payload) != current):
                 continue
             for row in payload.get("results",[]):
-                if row.get("rollout_parameters") == setting.model_dump() and row.get("game_elapsed_ns",0)>0:
+                from .rollout_quality import Setting
+                if Setting.model_validate(row.get("rollout_parameters",{})).model_dump() == setting.model_dump() and row.get("game_elapsed_ns",0)>0:
                     times.append(row["game_elapsed_ns"]/1e9)
                     sizes.append(len(json.dumps(row,ensure_ascii=False).encode("utf-8")))
         if times:
             per_game = mean(times)
             sources.append({"setting":setting.identifier,"source":"同CPU・同相手・同設定・同実装の完了対局", "samples":len(times),"game_seconds":per_game})
         elif setting.continuation in REFERENCE_SECONDS_8 and setting.time_limit_ms is None:
-            per_game = REFERENCE_SECONDS_8[setting.continuation]*setting.trials/8
-            sources.append({"setting":setting.identifier,"source":"Phase17の混合相手・同機種測定を比例換算した参考値", "samples":0,"game_seconds":per_game})
+            per_game = REFERENCE_SECONDS_8[setting.continuation]*(setting.trials/8 if setting.method=="legacy" else setting.total_budget*15/1200)
+            sources.append({"setting":setting.identifier,"source":"Phase17参考値のRollout数比例モデル。Hybridの追加処理・再サンプル費用は未校正", "samples":0,"game_seconds":per_game})
         else:
             per_game = 0
             known = False
