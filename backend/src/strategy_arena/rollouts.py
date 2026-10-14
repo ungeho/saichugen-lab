@@ -18,7 +18,7 @@ def sampled_game(observation, rng):
     return game
 
 def rollout_trial(observation, cards, templates, seed, trial, check=lambda: None, policy_names=None,
-                  on_game=lambda stage: None):
+                  on_game=lambda stage: None, outcome_hook=None):
     # 実行時importによりregistry/comparison/runnerとの初期化循環を避ける。
     from .comparison import clone_strategy
     from .experiments.runner import derived_seed
@@ -57,4 +57,6 @@ def rollout_trial(observation, cards, templates, seed, trial, check=lambda: None
                                 "sole_win": int(won and len(winners) == 1),
                                 "joint_win": int(won and len(winners) > 1),
                                 "reward": terminal_rewards(winners)[observation.player]})
+        if outcome_hook is not None:
+            rows[-1].update(outcome_hook(game, observation))
     return rows

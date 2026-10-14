@@ -36,6 +36,7 @@ from ..experiments.evaluation_statistics import PlanningInput,plan_samples
 from ..experiments.design_lab import DesignLab,PlanSpec,DesignPlanningInput,design_sample_plan,AllocationRequest,allocate,pilot_template
 from ..experiments.evidence_lab import EvidenceLab,SeriesSpec,EvidenceSource,Projection
 from ..experiments.zigzag_lab import zigzag_template,zigzag_result,zigzag_history
+from ..experiments.middle_lab import MiddleJobs,MiddleConfig,middle_estimate
 from ..rule_guide import rule_guide, judge
 from contextlib import asynccontextmanager
 
@@ -109,6 +110,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         yield
         jobs.close()
         quality.close()
+        middle.close()
         design.close()
         evaluation.close()
         arena.close()
@@ -123,6 +125,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     evaluation=EvaluationJobs(store,definitions,arena,evolution)
     design=DesignLab(store,definitions,evaluation,evolution)
     evidence=EvidenceLab(store,design)
+    middle=MiddleJobs(store,design,evidence)
 
     def evolution_call(action):
         try:return action()
@@ -180,6 +183,30 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
 
     @app.post('/api/design/recommendations/{identifier}/draft',status_code=201)
     def design_recommended(identifier:str,request:RecommendedPlan):return evolution_call(lambda:design.recommended_draft(identifier,request.index))
+
+    class MiddleStart(BaseModel):
+        condition_hash:str=Field(pattern=r'^[a-f0-9]{64}$')
+    class MiddleLink(BaseModel):
+        series_id:str
+        version:int=Field(default=1,ge=1)
+
+    @app.post('/api/middle/estimate')
+    def middle_preview(request:MiddleConfig):return middle_estimate(request)
+    @app.post('/api/middle/jobs',status_code=201)
+    def middle_register(request:MiddleConfig):return evolution_call(lambda:middle.register(request))
+    @app.get('/api/middle/jobs')
+    def middle_history():return middle.history()
+    @app.get('/api/middle/jobs/{identifier}')
+    @app.get('/api/middle/jobs/{identifier}/export')
+    def middle_read(identifier:str):return evolution_call(lambda:middle.get(identifier))
+    @app.post('/api/middle/jobs/{identifier}/start',status_code=202)
+    def middle_start(identifier:str,request:MiddleStart):return evolution_call(lambda:middle.start(identifier,request.condition_hash))
+    @app.post('/api/middle/jobs/{identifier}/cancel')
+    def middle_cancel(identifier:str):return evolution_call(lambda:middle.cancel(identifier))
+    @app.post('/api/middle/jobs/{identifier}/design-draft',status_code=201)
+    def middle_followup(identifier:str):return evolution_call(lambda:middle.design_draft(identifier))
+    @app.post('/api/middle/jobs/{identifier}/evidence',status_code=201)
+    def middle_evidence(identifier:str,request:MiddleLink):return evolution_call(lambda:middle.link_evidence(identifier,request.series_id,request.version))
 
     @app.post('/api/zigzag/template')
     def zigzag_plan_template():return zigzag_template().model_dump(mode='json')

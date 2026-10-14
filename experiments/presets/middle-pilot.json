@@ -1,0 +1,26 @@
+{
+  "name": "中間順位制御パイロット",
+  "deals": 1,
+  "start_offset": 7000,
+  "turns": [
+    0,
+    6,
+    11,
+    12,
+    13
+  ],
+  "trials": 8,
+  "validation_trials": 32,
+  "validation_offset": 7000,
+  "max_validate": 2,
+  "continuation": [
+    "Random",
+    "Random",
+    "Random"
+  ],
+  "policy_seed": 42,
+  "reproduce": true,
+  "reproduce_rollouts": 2,
+  "timeout_seconds": 120,
+  "hypothesis": "目先の中間確率と終局価値の逆転、および相手得点差の変化を探索する。仮説は未検証。"
+}

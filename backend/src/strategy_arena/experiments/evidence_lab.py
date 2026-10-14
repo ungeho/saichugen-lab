@@ -193,6 +193,9 @@ class EvidenceLab:
             'integrity_errors':errors,'state':'Invalidated' if errors else 'confirmatory_single_plan' if raw['spec']['interpretation']=='confirmatory' else 'exploratory_diagnostic',
             'time_basis':'Series elapsed_secondsは実験全体の経過秒。曲線elapsed_secondsは対象構成の完了対局の実行秒を累積し、保存・監視等の時間を含まない。','order':'実験の関連付け順→各Planの登録配札順。結果による並べ替えなし。',
             'warning':'途中区間を見て採用・棄却を判断できる保証はありません。事後的な蓄積は確証評価ではありません。'}
+        with closing(sqlite3.connect(self.store.path)) as db:
+            exists=db.execute("SELECT 1 FROM sqlite_master WHERE name='middle_evidence_links'").fetchone()
+            view['external_references']=[{'job_id':j,'condition_hash':h,'note':n,'aggregated':False} for j,h,n in db.execute('SELECT job_id,condition_hash,note FROM middle_evidence_links WHERE series_id=? AND version=?',(identifier,version))] if exists else []
         view['recommendations']=self.recommendations(view)
         with closing(sqlite3.connect(self.store.path)) as db:
             view['recommendation_history']=[json.loads(r[0]) for r in db.execute('SELECT payload FROM evidence_recommendations WHERE id=? AND version=? ORDER BY seq',(identifier,version))]
