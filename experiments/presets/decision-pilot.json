@@ -1,0 +1,45 @@
+{
+  "name": "中間順位・4意思決定規則パイロット",
+  "deals": 4,
+  "start_offset": 11000,
+  "turns": [
+    3,
+    6,
+    9,
+    11,
+    12,
+    13,
+    14
+  ],
+  "trials": 8,
+  "validation_trials": 32,
+  "validation_offset": 11000,
+  "max_validate": 0,
+  "continuation": [
+    "Random",
+    "Random",
+    "Random"
+  ],
+  "policy_seed": 42,
+  "reproduce": false,
+  "reproduce_rollouts": 2,
+  "timeout_seconds": 120,
+  "hypothesis": "厳密中間で直近2位率より得点差や安全余裕を考慮した札が有利になる局面を、選択と独立評価を分けて調べる。未検証。",
+  "collectors": [
+    "Random",
+    "Heuristic",
+    "ScoreAware",
+    "Zigzag",
+    "Reverse Zigzag"
+  ],
+  "definition": {
+    "version": "strict-middle-v1",
+    "small": 5,
+    "large": 10,
+    "balance_tolerance": 0
+  },
+  "max_positions": 12,
+  "controls": 3,
+  "evaluation_trials": 32,
+  "safety_tolerance": 0.0
+}

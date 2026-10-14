@@ -1,0 +1,11 @@
+import {initial as strataInitial,type Candidate,type Position,type Job} from '../stratification/stratificationModel';
+export const rules=['Self-Middle','Gap-Control','Safety-Margin','Terminal-Value'];
+export const initial={...strataInitial,name:'中間順位・4意思決定規則パイロット',start_offset:11000,validation_offset:11000,controls:3,max_validate:0,evaluation_trials:32,safety_tolerance:0};
+export type Evidence={mean:number|null;interval:[number,number]|null;independent_world_samples?:number;independent_deals?:number;method:string};
+export type DecisionCandidate=Candidate&{next_opponent_gap:number;minimum_margin_if_middle:number|null;signed_minimum_margin_mean:number;margin_balance_if_middle:number|null;reward_evidence:Evidence};
+export type Contrast={left:string;right:string;same_card:boolean;reward_difference:Evidence};
+export type DecisionPosition=Position&{decision:{evaluation:unknown;rules:{rule:string;selected_card:{rank:number;suit:number};selection:DecisionCandidate;evaluation:DecisionCandidate}[];comparisons:Contrast[];failures:{rule:string;observed:boolean;description:string}[];all_agree:boolean;self_terminal_disagree:boolean;unique_selected_cards:number;selection_seconds:number;evaluation_seconds:number;initial_safety:{minimum_margin:number|null;signed_minimum_margin:number;margin_balance:number};inference:string;agreement_pairs:{left:string;right:string;same_card:boolean}[]}};
+export type Group={stratum:string;independent_deals:number;positions:number;all_agree_fraction:number;self_terminal_disagreement_fraction:number;comparisons:{left:string;right:string;evidence:Evidence}[];agreement_pairs:{left:string;right:string;agreement_fraction:number}[];interpretation:string};
+export type DecisionJob=Omit<Job,'positions'|'cluster_summary'>&{positions:DecisionPosition[];cluster_summary:Group[]|null};
+export function filterPositions(rows:DecisionPosition[],group:string,relation:string,size:string,period:string,source:string,disagree:boolean){return rows.filter(p=>(!group||p.stratum.class===group)&&(!relation||p.stratum.relation===relation)&&(!size||p.stratum[size as 'both_small'|'both_large'])&&(!period||p.period===period)&&(!source||p.origins.some(o=>o.source===source))&&(!disagree||p.decision.self_terminal_disagree));}
+export function interval(e:Evidence){return e.interval?`[${e.interval[0].toFixed(3)}, ${e.interval[1].toFixed(3)}]`:'未算出';}

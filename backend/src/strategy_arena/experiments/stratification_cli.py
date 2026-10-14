@@ -11,11 +11,11 @@ from .evidence_lab import EvidenceLab
 from .stratification_lab import StratificationJobs,StratificationConfig,stratification_estimate
 from ..strategies.declarative import DefinitionStore
 
-def main():
-    p=argparse.ArgumentParser();p.add_argument('--config',required=True,type=Path);p.add_argument('--database',type=Path,default=Path('research-local/stratification.sqlite'));p.add_argument('--register',action='store_true');p.add_argument('--run');p.add_argument('--output',type=Path);a=p.parse_args()
-    c=StratificationConfig.model_validate_json(a.config.read_text(encoding='utf-8-sig'));print(json.dumps(stratification_estimate(c)),flush=True)
+def main(config_type=StratificationConfig,jobs_type=StratificationJobs,estimate=stratification_estimate,default_database='research-local/stratification.sqlite'):
+    p=argparse.ArgumentParser();p.add_argument('--config',required=True,type=Path);p.add_argument('--database',type=Path,default=Path(default_database));p.add_argument('--register',action='store_true');p.add_argument('--run');p.add_argument('--output',type=Path);a=p.parse_args()
+    c=config_type.model_validate_json(a.config.read_text(encoding='utf-8-sig'));print(json.dumps(estimate(c)),flush=True)
     if not a.register and not a.run:return
-    a.database.parent.mkdir(parents=True,exist_ok=True);s=ExperimentStore(a.database);defs=DefinitionStore(s.path);arena=arena_jobs(s);evo=Evolution(s,defs,arena);ev=EvaluationJobs(s,defs,arena,evo);design=DesignLab(s,defs,ev,evo);lab=StratificationJobs(s,design,EvidenceLab(s,design))
+    a.database.parent.mkdir(parents=True,exist_ok=True);s=ExperimentStore(a.database);defs=DefinitionStore(s.path);arena=arena_jobs(s);evo=Evolution(s,defs,arena);ev=EvaluationJobs(s,defs,arena,evo);design=DesignLab(s,defs,ev,evo);lab=jobs_type(s,design,EvidenceLab(s,design))
     try:
         v=lab.register(c) if a.register else lab.get(a.run)
         if v['config']!=c.model_dump(mode='json'):raise ValueError('登録とファイルの条件が不一致')

@@ -78,6 +78,7 @@ def collect(c,check=lambda:None,progress=lambda:None):
 class StratificationJobs(MiddleJobs):
     kind='middle_stratification_v1'
     estimate=staticmethod(stratification_estimate)
+    config_type=StratificationConfig
 
     def registration_extras(self,c):
         return {'rotations':'all-three-observers-per-collector-trajectory','strata':c.definition.model_dump(),'collectors':c.collectors,'analysis_selection':'均衡・上側接近・下側接近を巡回、配札・収集元の分析数を均す。時点優先12,11,13,14,9,6,3。結果を見て選ばない。',
@@ -92,13 +93,32 @@ class StratificationJobs(MiddleJobs):
         if v['status']=='Invalidated':v.update(inventory=[],collection_summary=None,cluster_summary=None)
         return v
 
+    def position_results(self,c,records,observations,check,progress):
+        selected=select_positions(records,c.max_positions,c.controls,c.turns);validated=0
+        for record in selected:
+            check();obs=observations[record['position_hash']];pid=record['position_hash']
+            result=evaluate_stratified(obs,tuple(sorted(obs.legal_actions)),c.continuation,c.trials,derived_seed(c.policy_seed,'strata-discovery:'+pid),c.max_positions*(17+272*7),check,progress)
+            item={**record,'position_id':pid,'observation':asdict(obs),'labels':['中間得点' if record['stratum']['strict_middle'] else record['stratum']['class'],record['stratum']['relation'] or 'control',record['source']],
+                'rounds_remaining':5-obs.turn//3,'search':result,'validation':None}
+            if result['reversals'] and validated<c.max_validate:
+                pair=result['reversals'][0];cards=tuple(Card(**pair[k]) for k in ('a','b'))
+                validation=evaluate_stratified(obs,cards,c.continuation,c.validation_trials,derived_seed(1000000+c.validation_offset,'strata-validation:'+pid),max(1,c.max_validate*16),check,progress)
+                direct=next(x for x in validation['pairs'] if x['a']==pair['a'] and x['b']==pair['b'])
+                validation.update(selected_pair={'a':pair['a'],'b':pair['b']},selected_result=direct,direction_repeated=direct['g']['G1'],
+                    discovery_case_b=pair['case_b'],validation_case_b=direct['case_b'],case_b_repeated=pair['case_b'] and direct['case_b'],
+                    other_opponents_reproduced=False,causal_mechanism_supported=False,scope='独立世界での方向再評価。新しい独立配札や因果機序の検証ではない。')
+                item['validation']=validation;validated+=1
+            yield item
+
+    def summarize_positions(self,positions):return cluster_summary(positions)
+
     def start(self,identifier,expected_hash):
         with self.lock:
             if self.active:raise RuntimeError('層別実験は1件ずつ')
             v=self.get(identifier)
             if v['status']!='Registered' or v['condition_hash']!=expected_hash:raise ValueError('登録状態・Hash不一致')
             if v['snapshot']['sources']!=runtime_info()['source_sha256']:raise ValueError('登録後に実装が変わりました')
-            c=StratificationConfig.model_validate(v['config']);v.pop('id',None);v['status']='Running';v['inventory']=[];v['collection_summary']=None;v['cluster_summary']=None;self.active=identifier;self.owned.add(identifier);self.stop=Event();self.store.update(identifier,v)
+            c=self.config_type.model_validate(v['config']);v.pop('id',None);v['status']='Running';v['inventory']=[];v['collection_summary']=None;v['cluster_summary']=None;self.active=identifier;self.owned.add(identifier);self.stop=Event();self.store.update(identifier,v)
         def worker():
             started=monotonic()
             def check():
@@ -108,22 +128,9 @@ class StratificationJobs(MiddleJobs):
             def progress():v['progress']+=1;persist()
             try:
                 records,observations,summary=collect(c,check,progress);v['inventory']=records;v['collection_summary']=summary;persist()
-                selected=select_positions(records,c.max_positions,c.controls,c.turns);validated=0
-                for record in selected:
-                    check();obs=observations[record['position_hash']];pid=record['position_hash']
-                    result=evaluate_stratified(obs,tuple(sorted(obs.legal_actions)),c.continuation,c.trials,derived_seed(c.policy_seed,'strata-discovery:'+pid),c.max_positions*(17+272*7),check,progress)
-                    item={**record,'position_id':pid,'observation':asdict(obs),'labels':['中間得点' if record['stratum']['strict_middle'] else record['stratum']['class'],record['stratum']['relation'] or 'control',record['source']],
-                        'rounds_remaining':5-obs.turn//3,'search':result,'validation':None}
-                    if result['reversals'] and validated<c.max_validate:
-                        pair=result['reversals'][0];cards=tuple(Card(**pair[k]) for k in ('a','b'))
-                        validation=evaluate_stratified(obs,cards,c.continuation,c.validation_trials,derived_seed(1000000+c.validation_offset,'strata-validation:'+pid),max(1,c.max_validate*16),check,progress)
-                        direct=next(x for x in validation['pairs'] if x['a']==pair['a'] and x['b']==pair['b'])
-                        validation.update(selected_pair={'a':pair['a'],'b':pair['b']},selected_result=direct,direction_repeated=direct['g']['G1'],
-                            discovery_case_b=pair['case_b'],validation_case_b=direct['case_b'],case_b_repeated=pair['case_b'] and direct['case_b'],
-                            other_opponents_reproduced=False,causal_mechanism_supported=False,scope='独立世界での方向再評価。新しい独立配札や因果機序の検証ではない。')
-                        item['validation']=validation;validated+=1
+                for item in self.position_results(c,records,observations,check,progress):
                     v['positions'].append(item);persist()
-                v['cluster_summary']=cluster_summary(v['positions']);v['status']='Completed'
+                v['cluster_summary']=self.summarize_positions(v['positions']);v['status']='Completed'
             except InterruptedError as e:v['status']=str(e)
             except Exception as e:v['status']='Failed';v['error']=f'{type(e).__name__}: {e}'
             finally:
