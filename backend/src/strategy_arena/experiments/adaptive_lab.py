@@ -67,6 +67,10 @@ class AdaptiveJobs(ReliabilityJobs):
     config_type=AdaptiveConfig
     estimate=staticmethod(adaptive_estimate)
 
+    def plan_extras(self,c):return {}
+    def begin_run(self,v):return None
+    def finish_run(self,v,token):pass
+
     def result_content(self,v):return {**super().result_content(v),'execution_cost':v.get('execution_cost')}
 
     def start(self,identifier,expected_hash):
@@ -80,7 +84,7 @@ class AdaptiveJobs(ReliabilityJobs):
             v['execution_cost'].update(stage='policy',limit=c.max_derived_games,scope='手番数は完了派生対局の実行ターン数。中断中の1対局の部分手番は未計測。収集軌跡は別。')
             self.active=identifier;self.owned.add(identifier);self.stop=Event();self.store.update(identifier,v)
         def worker():
-            started=monotonic();last=[started];token=execution_meter.set(v['execution_cost'])
+            started=monotonic();last=[started];token=execution_meter.set(v['execution_cost']);run_token=self.begin_run(v)
             def check():
                 if self.stop.is_set():raise InterruptedError('Cancelled')
                 if monotonic()-started>c.timeout_seconds:raise InterruptedError('TimedOut')
@@ -95,6 +99,7 @@ class AdaptiveJobs(ReliabilityJobs):
             except InterruptedError as e:v['status']=str(e)
             except Exception as e:v.update(status='Failed',error=f'{type(e).__name__}: {e}')
             finally:
+                self.finish_run(v,run_token)
                 v['result_hash']=digest(self.result_content(v));persist();execution_meter.reset(token)
                 with self.lock:self.active=None
         Thread(target=worker,daemon=True,name='adaptive-sampling').start();return self.get(identifier)
@@ -112,7 +117,7 @@ class AdaptiveJobs(ReliabilityJobs):
                   'stop_rule':'gap閾値、または全競合への対応差>z*SE+minimum_gap。探索的停止で逐次的な誤選択保証なし。',
                   'tie_break':'rank昇順、同rankはsuit昇順','unit':'Rollout=候補1枚から終局まで1派生対局。手番=3席同時の1ターン。',
                   'hypothesis':c.hypothesis,'regret':'独立参照標本で選択した有限標本参照札をさらに独立な最終標本で評価。負値を許す。',
-                  'baseline_commit':runtime_info()['head_commit']}
+                  'baseline_commit':runtime_info()['head_commit'],**self.plan_extras(c)}
         with self.lock,closing(sqlite3.connect(self.store.path)) as db,db:
             db.execute('BEGIN IMMEDIATE')
             db.execute('CREATE TABLE IF NOT EXISTS adaptive_deals(deal_hash TEXT PRIMARY KEY,seed INTEGER,job_id TEXT)')

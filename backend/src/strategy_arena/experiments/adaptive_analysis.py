@@ -15,6 +15,7 @@ from ..strategies.registry import create_strategy
 
 METHODS=('Fixed','Gap-Adaptive','Uncertainty-Adaptive')
 execution_meter=ContextVar('adaptive_execution_meter',default=None)
+selection_observer=ContextVar('adaptive_selection_observer',default=None)
 
 def table(cards,samples):
     return [{'card':asdict(card),'trials':len(values),'reward':float(np.mean([v['reward'] for v in values])),
@@ -61,6 +62,9 @@ def cost(obs,cards,worlds,seconds):
 def select(obs,cards,model,seed,budget,method,c,check=lambda:None,progress=lambda:None):
     cards=tuple(sorted(cards));cap=budget if c.budget_mode=='max_worlds' else min(budget,c.games_per_policy//len(cards))
     if cap<c.initial_worlds:raise ValueError('全合法手の初期評価に必要な総派生対局予算がありません')
+    observer=selection_observer.get()
+    meta={'model':model,'seed':seed,'budget':budget,'method':method,'effective_cap':cap}
+    if observer is not None:observer(meta,'started',None)
     samples=[[] for _ in cards];trace=[];started=perf_counter();reason=None
     for trial in range(cap):
         check()
@@ -72,13 +76,16 @@ def select(obs,cards,model,seed,budget,method,c,check=lambda:None,progress=lambd
         trace.append({'worlds':n,'selected_card':rows[0]['card'],'estimated_reward':rows[0]['reward'],
                       'gap':contrasts[0]['gap'] if contrasts else 0,'paired_se':contrasts[0]['se'] if contrasts else 0,
                       'contrasts':contrasts,'stop_reason':reason,'candidates':rows})
+        if observer is not None:observer(meta,'checkpoint',trace[-1])
         if reason:break
     n=len(samples[0]);reason=reason or ('total_game_cap' if cap<budget else 'max_worlds')
     trace[-1]['stop_reason']=reason;rows=table(cards,samples)
-    return {'method':method,'model':model,'budget':budget,'seed':seed,'effective_cap':cap,'stop_reason':reason,
+    result={'method':method,'model':model,'budget':budget,'seed':seed,'effective_cap':cap,'stop_reason':reason,
             'early_stop':n<cap,'max_budget_reached':n==budget,'selected_card':ranked(rows)[0]['card'],
             'self_middle_card':ranked(rows,'immediate_middle')[0]['card'],'candidates':rows,'trace':trace,
             'cost':cost(obs,cards,n,perf_counter()-started)}
+    if observer is not None:observer(meta,'completed',result)
+    return result
 
 def sample_table(obs,cards,model,seed,worlds,check,progress):
     started=perf_counter();samples=[[] for _ in cards]

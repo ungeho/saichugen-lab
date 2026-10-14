@@ -24,6 +24,12 @@ Python 3.12+ / uv / FastAPI / NumPy / SQLite と、React / TypeScript / Vite / p
 
 `/research/adaptive?experiment=<保存実験ID>`で結果へ直接アクセスできます。表示だけでは再実行しません。設定のJSON保存、進捗・停止、SQLite履歴、Experiment Planの追試Draft、既存Evidence Seriesへの参照に対応しています。使い方、CLI、予算の意味、約14.64秒の小規模パイロット、統計上の制限は [Phase 32](docs/phase32.md) を参照してください。
 
+## 適応停止の独立検証（Phase 33）
+
+「戦略研究 → 中間順位・意思決定研究 → Adaptive Stopping Validation Lab」で、Phase 32の停止式・閾値を固定した検証ができます。全候補のチェックポイント、差と対応SE、停止余裕、上限・中断を記録し、全事前局面を実配札単位で集約します。早期停止だけの副次分析と主分析を分け、停止率の不確実性、Fixedとの計算量差・独立報酬差を表示します。
+
+`/research/stopping?experiment=<ID>`で保存実験を復元できます。検証用2配札・4局面のパイロットでは、ScoreAware継続のGapに1件の早期停止があり、96派生対局を削減してFixedと同じカードを選びました。独立配札が少なく、一般的な報酬維持は未確認です。結果、専用Plan、CLI、制限は [Phase 33](docs/phase33.md) を参照してください。
+
 ## 実装済みの基本機能
 
 - Pythonゲームエンジン、3ターン×5ラウンド、得点各層、共同勝利、完全リプレイ。

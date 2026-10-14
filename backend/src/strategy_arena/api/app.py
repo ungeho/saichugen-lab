@@ -39,6 +39,7 @@ from ..experiments.zigzag_lab import zigzag_template,zigzag_result,zigzag_histor
 from ..experiments.middle_lab import MiddleJobs,MiddleConfig,middle_estimate
 from ..experiments.stratification_lab import StratificationJobs,StratificationConfig,stratification_estimate
 from ..experiments.decision_lab import DecisionJobs,DecisionConfig,decision_estimate
+from ..experiments.stopping_lab import StoppingJobs,StoppingConfig
 from ..experiments.adaptive_lab import AdaptiveJobs,AdaptiveConfig
 from ..experiments.reliability_lab import ReliabilityJobs,ReliabilityConfig
 from ..rule_guide import rule_guide, judge
@@ -114,6 +115,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         yield
         jobs.close()
         quality.close()
+        stopping_lab.close()
         adaptive.close()
         reliability.close()
         decision.close()
@@ -138,6 +140,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     decision=DecisionJobs(store,design,evidence)
     reliability=ReliabilityJobs(store,design,evidence)
     adaptive=AdaptiveJobs(store,design,evidence)
+    stopping_lab=StoppingJobs(store,design,evidence)
 
     def evolution_call(action):
         try:return action()
@@ -201,6 +204,24 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     class MiddleLink(BaseModel):
         series_id:str
         version:int=Field(default=1,ge=1)
+
+    @app.post('/api/stopping/estimate')
+    def stopping_preview(request:StoppingConfig):return evolution_call(lambda:stopping_lab.estimate(request))
+    @app.post('/api/stopping/jobs',status_code=201)
+    def stopping_register(request:StoppingConfig):return evolution_call(lambda:stopping_lab.register(request))
+    @app.get('/api/stopping/jobs')
+    def stopping_history():return stopping_lab.history()
+    @app.get('/api/stopping/jobs/{identifier}')
+    @app.get('/api/stopping/jobs/{identifier}/export')
+    def stopping_read(identifier:str):return evolution_call(lambda:stopping_lab.get(identifier))
+    @app.post('/api/stopping/jobs/{identifier}/start',status_code=202)
+    def stopping_start(identifier:str,request:MiddleStart):return evolution_call(lambda:stopping_lab.start(identifier,request.condition_hash))
+    @app.post('/api/stopping/jobs/{identifier}/cancel')
+    def stopping_cancel(identifier:str):return evolution_call(lambda:stopping_lab.cancel(identifier))
+    @app.post('/api/stopping/jobs/{identifier}/design-draft',status_code=201)
+    def stopping_draft(identifier:str):return evolution_call(lambda:stopping_lab.design_draft(identifier))
+    @app.post('/api/stopping/jobs/{identifier}/evidence',status_code=201)
+    def stopping_link(identifier:str,request:MiddleLink):return evolution_call(lambda:stopping_lab.link_evidence(identifier,request.series_id,request.version))
 
     @app.post('/api/adaptive/estimate')
     def adaptive_preview(request:AdaptiveConfig):return evolution_call(lambda:adaptive.estimate(request))

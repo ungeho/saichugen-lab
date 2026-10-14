@@ -1,4 +1,4 @@
-import {useEffect,useState} from 'react';
+import {useEffect,useState,type ReactNode} from 'react';
 import {api} from '../../model';
 import {Button} from '../../components/ui/button';
 import {Chart} from '../../Chart';
@@ -6,7 +6,7 @@ type Cost={hidden_worlds?:number;derived_games:number;simulated_turns:number;ela
 type Evidence={mean:number;interval:[number,number]|null;reason?:string};
 type Row={method:string;model:string;repeat:number;budget:number;selected_card:{rank:number;suit:number};stop_reason:string;early_stop:boolean;cost:Cost;trace:unknown[];evaluations:{model:string;value:number;reference_card:unknown;minus_fixed:Evidence;minus_self:Evidence;estimated_regret:Evidence}[]};
 type Position={population:string;position_hash:string;deal_hash:string;turn:number;period:string;stratum:{class:string;relation:string|null};observation:unknown;adaptive:{rows:Row[];frequencies:unknown;reference:unknown;final:unknown;stage_seeds:unknown;selection_cost:Cost;overhead_cost:Cost;scope:string}};
-type Job={id:string;status:string;condition_hash:string;positions:Position[];progress:number;elapsed_seconds:number;error:string|null;config:unknown;snapshot:unknown;cluster_summary:unknown;cost_summary:unknown;execution_cost?:unknown};
+export type AdaptiveJob={id:string;status:string;condition_hash:string;positions:Position[];progress:number;elapsed_seconds:number;error:string|null;config:unknown;snapshot:unknown;cluster_summary:unknown;cost_summary:unknown;execution_cost?:unknown};
 export const adaptiveInitial={name:'適応サンプリング独立参照パイロット',deals:1,start_offset:16000,partition:'development',turns:[11],max_positions:2,
  budgets:[16,32],repeats:2,models:['Random','Heuristic','ScoreAware'],reference_worlds:32,final_worlds:32,initial_worlds:16,batch_worlds:16,
  gap_threshold:.5,uncertainty_z:2,minimum_gap:.05,budget_mode:'max_worlds',games_per_policy:1024,cross_models:false,max_derived_games:40000,historical_limit:0,timeout_seconds:120};
@@ -14,26 +14,27 @@ export const adaptiveExperimentId=(search:string)=>new URLSearchParams(search).g
 const card=(c:Row['selected_card'])=>`${['♣','♦','♥','♠'][c.suit]}${c.rank===1?'A':c.rank===11?'J':c.rank===12?'Q':c.rank===13?'K':c.rank}`;
 const stopNames:Record<string,string>={max_worlds:'最大世界数に到達',total_game_cap:'総派生対局の上限',gap_threshold:'上位差が固定閾値を超過',exploratory_paired_se:'全競合への差が探索的SE基準を超過',single_legal_action:'合法手が1枚'};
 const interval=(e:Evidence)=>e.interval?`${e.mean.toFixed(3)} [${e.interval.map(x=>x.toFixed(3)).join(', ')}]`:`${e.mean.toFixed(3)}（標本不足）`;
-export function AdaptivePanel(){
- const [text,setText]=useState(JSON.stringify(adaptiveInitial,null,2)),[job,setJob]=useState<Job|null>(null),[history,setHistory]=useState<Job[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[estimate,setEstimate]=useState<unknown>(null),[index,setIndex]=useState(0),[reference,setReference]=useState<unknown>(null),[series,setSeries]=useState('');
+export function AdaptivePanel({lab='adaptive',title='Adaptive Sampling & Independent Reference Lab',initial=adaptiveInitial,phase=32,renderExtra}:{lab?:string;title?:string;initial?:object;phase?:number;renderExtra?:(job:AdaptiveJob)=>ReactNode}={}){
+ const prefix='/api/'+lab;
+ const [text,setText]=useState(JSON.stringify(initial,null,2)),[job,setJob]=useState<AdaptiveJob|null>(null),[history,setHistory]=useState<AdaptiveJob[]>([]),[error,setError]=useState(''),[busy,setBusy]=useState(false),[estimate,setEstimate]=useState<unknown>(null),[index,setIndex]=useState(0),[reference,setReference]=useState<unknown>(null),[series,setSeries]=useState('');
  const [query,setQuery]=useState(location.search);const active=job?.status==='Running';
- const refresh=()=>api<Job[]>('/api/adaptive/jobs').then(setHistory);
+ const refresh=()=>api<AdaptiveJob[]>(prefix+'/jobs').then(setHistory);
  useEffect(()=>{refresh().catch(e=>setError(String(e)));const pop=()=>setQuery(location.search);addEventListener('popstate',pop);return()=>removeEventListener('popstate',pop);},[]);
  useEffect(()=>{let live=true;const id=adaptiveExperimentId(query);setError('');if(!id){setJob(null);return;}setJob(null);setIndex(0);
-  api<Job>('/api/adaptive/jobs/'+encodeURIComponent(id)).then(v=>{if(live){setJob(v);setText(JSON.stringify(v.config,null,2));setEstimate(null);setReference(null);setIndex(0);}}).catch(e=>{if(live){setJob(null);setError('保存実験を開けません: '+String(e));}});return()=>{live=false;};},[query]);
- useEffect(()=>{if(!active||!job)return;let live=true;const t=setTimeout(()=>api<Job>('/api/adaptive/jobs/'+job.id).then(v=>{if(live){setJob(v);if(v.status!=='Running')refresh().catch(e=>setError(String(e)));}}).catch(e=>{if(live)setError(String(e));}),600);return()=>{live=false;clearTimeout(t);};},[job,active]);
+  api<AdaptiveJob>(prefix+'/jobs/'+encodeURIComponent(id)).then(v=>{if(live){setJob(v);setText(JSON.stringify(v.config,null,2));setEstimate(null);setReference(null);setIndex(0);}}).catch(e=>{if(live){setJob(null);setError('保存実験を開けません: '+String(e));}});return()=>{live=false;};},[query]);
+ useEffect(()=>{if(!active||!job)return;let live=true;const t=setTimeout(()=>api<AdaptiveJob>(prefix+'/jobs/'+job.id).then(v=>{if(live){setJob(v);if(v.status!=='Running')refresh().catch(e=>setError(String(e)));}}).catch(e=>{if(live)setError(String(e));}),600);return()=>{live=false;clearTimeout(t);};},[job,active]);
  async function work(fn:()=>Promise<void>){setBusy(true);setError('');try{await fn();}catch(e){setError(String(e));}finally{setBusy(false);}}
- function open(v:Job){setJob(v);setText(JSON.stringify(v.config,null,2));setEstimate(null);setReference(null);setIndex(0);const url=new URL(location.href);url.searchParams.set('experiment',v.id);window.history.pushState(null,'',url.pathname+url.search);setQuery(url.search);}
- async function action(path:string,data:unknown={}){if(job){setJob(await api<Job>('/api/adaptive/jobs/'+job.id+path,data));await refresh();}}
- function download(){if(!job)return;const u=URL.createObjectURL(new Blob([JSON.stringify(job,null,2)],{type:'application/json'}));const a=document.createElement('a');a.href=u;a.download='adaptive-'+job.id+'.json';a.click();URL.revokeObjectURL(u);}
+ function open(v:AdaptiveJob){setJob(v);setText(JSON.stringify(v.config,null,2));setEstimate(null);setReference(null);setIndex(0);const url=new URL(location.href);url.searchParams.set('experiment',v.id);window.history.pushState(null,'',url.pathname+url.search);setQuery(url.search);}
+ async function action(path:string,data:unknown={}){if(job){setJob(await api<AdaptiveJob>(prefix+'/jobs/'+job.id+path,data));await refresh();}}
+ async function download(){if(!job)return;await work(async()=>{const response=await fetch(prefix+'/jobs/'+encodeURIComponent(job.id)+'/export');if(!response.ok)throw new Error('JSON出力の取得に失敗しました: '+response.status);const u=URL.createObjectURL(await response.blob());const a=document.createElement('a');a.href=u;a.download=lab+'-'+job.id+'.json';a.click();URL.revokeObjectURL(u);});}
  const p=job?.positions[index],rows=p?.adaptive.rows??[];
- return <section className="quality-study" aria-label="Adaptive Sampling & Independent Reference Lab"><div className="section-title"><div><small>ADAPTIVE SAMPLING / PHASE 32</small><h2>少ない計算で、同じ判断ができるか。</h2><p>適応方式の優位性は未検証です。停止判定は探索的な目安で、逐次有効な信頼保証ではありません。</p></div></div>
+ return <section className="quality-study" aria-label={title}><div className="section-title"><div><small>ADAPTIVE SAMPLING / PHASE {phase}</small><h2>少ない計算で、同じ判断ができるか。</h2><p>適応方式の優位性は未検証です。停止判定は探索的な目安で、逐次有効な信頼保証ではありません。</p></div></div>
  {error&&<p role="alert" className="error">{error}</p>}
  <section className="panel"><h3>方式・予算・閾値の事前登録</h3><p>Fixed / Gap-Adaptive / Uncertainty-Adaptiveを共通の隠し手札世界で比較します。総派生対局上限は候補全枚数を評価できる世界数に切り下げます。候補を一部だけ評価して予算を使い切りません。</p><textarea aria-label="Adaptive Plan JSON" rows={20} disabled={active} value={text} onChange={e=>{setText(e.target.value);setEstimate(null);}}/>
- <Button disabled={busy||active} onClick={()=>work(async()=>setEstimate(await api('/api/adaptive/estimate',JSON.parse(text))))}>適応実験を見積もる</Button>
- <Button disabled={busy||active} onClick={()=>work(async()=>{const v=await api<Job>('/api/adaptive/jobs',JSON.parse(text));open(v);await refresh();})}>適応の条件を登録</Button>{estimate!==null&&<pre>{JSON.stringify(estimate,null,2)}</pre>}
+ <Button disabled={busy||active} onClick={()=>work(async()=>setEstimate(await api(prefix+'/estimate',JSON.parse(text))))}>適応実験を見積もる</Button>
+ <Button disabled={busy||active} onClick={()=>work(async()=>{const v=await api<AdaptiveJob>(prefix+'/jobs',JSON.parse(text));open(v);await refresh();})}>適応の条件を登録</Button>{estimate!==null&&<pre>{JSON.stringify(estimate,null,2)}</pre>}
  <label>適応の保存履歴<select aria-label="適応の保存履歴" disabled={active} value={job?.id??''} onChange={e=>{const v=history.find(x=>x.id===e.target.value);if(v)open(v);}}><option value="">選択してください</option>{history.map(v=><option key={v.id} value={v.id}>{v.id.slice(0,8)} · {v.status}</option>)}</select></label></section>
- {job&&<><section className="panel"><h3>固定条件と進捗</h3><p role="status">{job.status} / {job.progress}ブロック / {job.elapsed_seconds.toFixed(2)}秒</p><p>条件Hash: {job.condition_hash}</p><p>実験への直接リンク: <a href={'/research/adaptive?experiment='+encodeURIComponent(job.id)}>{job.id}</a></p>
+ {job&&<>{renderExtra?.(job)}<section className="panel"><h3>固定条件と進捗</h3><p role="status">{job.status} / {job.progress}ブロック / {job.elapsed_seconds.toFixed(2)}秒</p><p>条件Hash: {job.condition_hash}</p><p>実験への直接リンク: <a href={'/research/'+lab+'?experiment='+encodeURIComponent(job.id)}>{job.id}</a></p>
  <Button disabled={busy||job.status!=='Registered'} onClick={()=>work(()=>action('/start',{condition_hash:job.condition_hash}))}>登録Hashで適応実験を開始</Button><Button disabled={busy||!['Running','Registered'].includes(job.status)} onClick={()=>work(()=>action('/cancel'))}>適応実験を停止</Button><Button variant="outline" onClick={download}>適応JSONを保存</Button>{job.error&&<p role="alert">{job.error}</p>}
  <details><summary>事前条件・版・3標本・総計算コスト</summary><pre>{JSON.stringify({snapshot:job.snapshot,cost:job.cost_summary,execution:job.execution_cost},null,2)}</pre></details></section>
  <section className="panel"><h3>方式比較と独立Regret</h3><label>適応の局面<select aria-label="適応の局面" value={index} onChange={e=>setIndex(Number(e.target.value))}>{job.positions.map((v,i)=><option key={v.position_hash} value={i}>{v.population} / 第{v.turn+1}手 / {v.stratum.class} / {v.stratum.relation}</option>)}</select></label>
@@ -45,6 +46,6 @@ export function AdaptivePanel(){
  <details><summary>Policy Selection / Reference Selection / Final Evaluation</summary><pre>{JSON.stringify({seeds:p.adaptive.stage_seeds,reference:p.adaptive.reference,final:p.adaptive.final},null,2)}</pre></details>
  <details><summary>選択一致率と反復間の不安定性</summary><pre>{JSON.stringify(p.adaptive.frequencies,null,2)}</pre></details><details><summary>判断時点の観測情報</summary><pre>{JSON.stringify(p.observation,null,2)}</pre></details></>}
  <details><summary>層別・実配札単位の集約（診断と新規を分離）</summary><pre>{JSON.stringify(job.cluster_summary,null,2)}</pre></details></section>
- <section className="panel"><h3>研究管理</h3><Button disabled={busy||job.status!=='Completed'} onClick={()=>work(async()=>setReference(await api('/api/adaptive/jobs/'+job.id+'/design-draft',{})))}>適応結果から別条件Draftを作る</Button><label>参照先Evidence Series ID<input aria-label="適応のEvidence Series ID" value={series} onChange={e=>setSeries(e.target.value)}/></label><Button disabled={busy||job.status!=='Completed'||!series} onClick={()=>work(async()=>setReference(await api('/api/adaptive/jobs/'+job.id+'/evidence',{series_id:series,version:1})))}>既存Evidenceへ参照</Button>{reference!==null&&<pre role="status">{JSON.stringify(reference,null,2)}</pre>}<p>参照だけを保存し、異なる局面実験をEvidenceの対応差へ合算しません。</p></section></>}
+ <section className="panel"><h3>研究管理</h3><Button disabled={busy||job.status!=='Completed'} onClick={()=>work(async()=>setReference(await api(prefix+'/jobs/'+job.id+'/design-draft',{})))}>適応結果から別条件Draftを作る</Button><label>参照先Evidence Series ID<input aria-label="適応のEvidence Series ID" value={series} onChange={e=>setSeries(e.target.value)}/></label><Button disabled={busy||job.status!=='Completed'||!series} onClick={()=>work(async()=>setReference(await api(prefix+'/jobs/'+job.id+'/evidence',{series_id:series,version:1})))}>既存Evidenceへ参照</Button>{reference!==null&&<pre role="status">{JSON.stringify(reference,null,2)}</pre>}<p>参照だけを保存し、異なる局面実験をEvidenceの対応差へ合算しません。</p></section></>}
  </section>;
 }
