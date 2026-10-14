@@ -60,6 +60,7 @@ test('分岐の報酬差とルール表を確認する',async({page})=>{
  await page.screenshot({path:'test-results/terminal-rewards-desktop.png',fullPage:true});
  await page.setViewportSize({width:390,height:844});
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+ await page.getByRole('button',{name:'画面メニューを開く',exact:true}).click();
  await page.getByRole('button',{name:'ゲームルール',exact:true}).click();
  const rules=page.getByRole('region',{name:'終局報酬のルール',exact:true});
  await expect(rules).toContainText('2021年論文');

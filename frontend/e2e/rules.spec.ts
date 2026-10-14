@@ -24,10 +24,13 @@ test('ルールの確認状況・具体例・ナビゲーションと対戦の�
  await page.setViewportSize({width:390,height:844});
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
  await rules.screenshot({path:'test-results/rules-mobile.png'});
+ await page.getByRole('button',{name:'画面メニューを開く',exact:true}).click();
  await page.getByRole('button',{name:'対戦テーブル',exact:true}).click();
  await expect(page.locator('.hand button')).toHaveCount(16);
  await expect(page.getByRole('region',{name:'同一局面のアルゴリズム比較',exact:true})).toBeVisible();
+ await page.getByRole('button',{name:'画面メニューを開く',exact:true}).click();
  await page.getByRole('button',{name:'比較実験',exact:true}).click();
+ await page.getByRole('button',{name:'画面メニューを開く',exact:true}).click();
  await page.getByRole('button',{name:'ゲームルール',exact:true}).click();
  await expect(rules.getByRole('heading',{name:'具体例で理解する'})).toBeVisible();
 });

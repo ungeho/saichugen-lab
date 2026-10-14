@@ -1,15 +1,3 @@
-import {ReliabilityPanel} from './features/reliability/ReliabilityPanel';
-import {DecisionPanel} from './features/decision/DecisionPanel';
-import {StratificationPanel} from './features/stratification/StratificationPanel';
-import {MiddlePanel} from './features/middle/MiddlePanel';
-import {ZigzagPanel} from './features/zigzag/ZigzagPanel';
-import {EvidencePanel} from './features/evidence/EvidencePanel';
-import {QualityStudyPanel} from './features/quality/QualityStudyPanel';
-import {TheoryLabPanel} from './features/theory/TheoryLabPanel';
-import {DesignPanel} from './features/design/DesignPanel';
-import {EvaluationPanel} from './features/evaluation/EvaluationPanel';
-import {EvolutionPanel} from './features/evolution/EvolutionPanel';
-import {StrategyArena} from './features/arena/StrategyArena';
 import React,{useState,useEffect} from 'react';
 import {createRoot} from 'react-dom/client';
 import {Button} from './components/ui/button';
@@ -21,16 +9,19 @@ import {DecisionInspector} from './features/game/DecisionInspector';
 import {PositionComparisonView} from './features/comparison/PositionComparisonView';
 import {metricValue,metricPercent,signedReward} from './evaluation';
 import {historyFrame} from './history';
-import {RulesPage} from './features/game/RulesPage';
+import {Workspace} from './features/workspace/Workspace';
+import {Overview,RecentExperiments} from './features/workspace/Overview';
+import {useWorkspaceRoute} from './features/workspace/navigation';
 import type {Algorithm} from './model';
 import './style.css';
+import './features/workspace/workspace.css';
 
 const percent=(n:number)=>`${(n*100).toFixed(1)}%`;
 function App(){
   const [available,setAvailable]=useState(names); const [catalog,setCatalog]=useState<Algorithm[]>([]); const [catalogError,setCatalogError]=useState('');
   const [selectedAlgorithm,setSelectedAlgorithm]=useState('Random'); const [quickAlgorithm,setQuickAlgorithm]=useState<string|null>(null); const [captureDetails,setCaptureDetails]=useState(true);
   const loadCatalog=()=>{setCatalogError('');api<Algorithm[]>('/api/algorithms').then(data=>{setCatalog(data);setAvailable(data.map(a=>a.name));}).catch(e=>setCatalogError(String(e)));};
-  useEffect(loadCatalog,[]); const [tab,setTab]=useState('game');const [seed,setSeed]=useState(42);const [strategies,setStrategies]=useState(['Random','Greedy','Heuristic']);
+  useEffect(loadCatalog,[]); const {page,navigate:setTab}=useWorkspaceRoute();const tab=page?.id;const [seed,setSeed]=useState(42);const [strategies,setStrategies]=useState(['Random','Greedy','Heuristic']);
   const [showComparison,setShowComparison]=useState(false);const [game,setGame]=useState<Game|null>(null);const [gameId,setGameId]=useState('');const [selectedTurn,setSelectedTurn]=useState<number|null>(null);
   const [scoreMetric,setScoreMetric]=useState<'cumulative'|'terminal'>('terminal');
   const [experiment,setExperiment]=useState<Experiment|null>(null);const [deals,setDeals]=useState(20);const [busy,setBusy]=useState(false);const [error,setError]=useState('');
@@ -45,12 +36,7 @@ function App(){
   const displayRound=replaying&&frame?frame.afterRound:obs?.round_scores??[0,0,0]; const displayGame=replaying&&frame?frame.afterGame:obs?.game_scores??[0,0,0];
   const displayTurn=replaying&&event?event.index+1:obs?.turn??0; const displaySizes=replaying&&frame?frame.handSizesAfter:obs?.hand_sizes??[17,17,17];
   const analysis=()=>work(async()=>{const next=await api<Game>(`/api/games/${gameId}?analysis=${game?.analysis_visible?'false':'true'}`);setGame({...next,id:gameId});});
-  return <div className="shell">
-    <header><div className="brand"><span className="mark">中</span><div><small>ALGORITHM RESEARCH LAB</small><h1>Strategy Arena <span>最中限</span></h1></div></div><span className="badge">GPCC資料・公開二次資料に基づく実装</span></header>
-    <nav><Button variant={tab==='reliability'?'default':'outline'} onClick={()=>setTab('reliability')}>Decision Reliability Lab</Button><Button variant={tab==='decision'?'default':'outline'} onClick={()=>setTab('decision')}>Middle-Position Decision Lab</Button><Button variant={tab==='stratification'?'default':'outline'} onClick={()=>setTab('stratification')}>Middle-Position Stratification Lab</Button><Button variant={tab==='middle'?'default':'outline'} onClick={()=>setTab('middle')}>Middle-Position Control Lab</Button><Button variant={tab==='zigzag'?'default':'outline'} onClick={()=>setTab('zigzag')}>Zigzag Strategy Lab</Button><Button variant={tab==='evidence'?'default':'outline'} onClick={()=>setTab('evidence')}>Evidence Accumulation Lab</Button><Button variant={tab==='design'?'default':'outline'} onClick={()=>setTab('design')}>Experimental Design Lab</Button><Button variant={tab==='evaluation'?'default':'outline'} onClick={()=>setTab('evaluation')}>Evaluation Lab</Button><Button variant={tab==='evolution'?'default':'outline'} onClick={()=>setTab('evolution')}>Strategy Evolution</Button><Button variant={tab==='arena'?'default':'outline'} onClick={()=>setTab('arena')}>Strategy Arena</Button><Button variant={tab==='theory'?'default':'outline'} onClick={()=>setTab('theory')}>Theory Lab</Button><Button variant={tab==='quality'?'default':'outline'} onClick={()=>setTab('quality')}>探索品質</Button><Button variant={tab==='game'?'default':'outline'} onClick={()=>setTab('game')}>対戦テーブル</Button><Button variant={tab==='experiments'?'default':'outline'} onClick={()=>setTab('experiments')}>比較実験</Button><Button variant={tab==='catalog'?'default':'outline'} onClick={()=>setTab('catalog')}>アルゴリズム図鑑</Button><Button variant={tab==='rules'?'default':'outline'} onClick={()=>setTab('rules')}>ゲームルール</Button></nav>
-    <section className="toolbar"><label>配札シード<input type="number" value={seed} onChange={e=>setSeed(Number(e.target.value))}/></label>{strategies.map((name,p)=><div className="strategy-choice" key={p}><label>プレイヤー {p+1}<select value={name} onChange={e=>setStrategies(strategies.map((v,i)=>i===p?e.target.value:v))}>{available.map(n=><option key={n}>{n}</option>)}</select></label><AlgorithmLink name={name} onOpen={setQuickAlgorithm}/></div>)}<span className="muted">K最大 / A最小 · 同時選択 · 中位が勝利</span></section>
-    {error&&<div role="alert" className="error">{error}</div>}
-    {tab==='reliability'?<ReliabilityPanel/>:tab==='decision'?<DecisionPanel/>:tab==='stratification'?<StratificationPanel/>:tab==='middle'?<MiddlePanel/>:tab==='zigzag'?<ZigzagPanel/>:tab==='evidence'?<EvidencePanel/>:tab==='design'?<DesignPanel/>:tab==='evaluation'?<EvaluationPanel/>:tab==='evolution'?<EvolutionPanel/>:tab==='arena'?<StrategyArena/>:tab==='theory'?<TheoryLabPanel/>:tab==='quality'?<QualityStudyPanel/>:tab==='rules'?<RulesPage/>:tab==='catalog'?<AlgorithmCatalog algorithms={catalog} selectedName={selectedAlgorithm} onSelect={setSelectedAlgorithm} error={catalogError} onReload={loadCatalog}/>:tab==='game'?<>
+  const gameView=<>
       <div className="section-title"><div><small>TACTICS × STRATEGY</small><h2>取るべきか、譲るべきか。</h2><p>3ターンの中位から、5ラウンドの中位へ。</p></div><div className="actions"><Button disabled={busy} onClick={create}>新しいゲーム</Button><Button variant="outline" disabled={busy||!game||game.finished||replaying} onClick={()=>step()}>AIで1ターン進む</Button><Button variant="outline" disabled={!game||busy} aria-expanded={showComparison} onClick={()=>setShowComparison(v=>!v)}>{showComparison?'比較パネルを閉じる':'同じ局面でAIを比較'}</Button></div></div>
       <label className="inline-toggle"><input type="checkbox" checked={captureDetails} onChange={e=>setCaptureDetails(e.target.checked)}/>判断の詳細を記録（新しいゲームから適用）</label>
       {replaying&&<p className="replay-note">過去のターンを表示しています。手札と得点もその時点のものです。対戦を続けるには「最新に戻る」を押してください。</p>}
@@ -66,14 +52,21 @@ function App(){
       {game&&showComparison&&<PositionComparisonView game={game} gameId={gameId} algorithms={catalog} selectedTurn={selectedTurn} onSelectTurn={setSelectedTurn} onAlgorithm={setQuickAlgorithm} onAnalysis={analysis} gameBusy={busy}/>}
       {history.length>0&&<section className="panel history"><div className="section-title"><h3>公開履歴とゲーム得点推移</h3><div className="actions"><Button variant="outline" disabled={!event||event.index===0} onClick={()=>setSelectedTurn(Math.max(0,(event?.index??0)-1))}>前の判断</Button><Button variant="outline" disabled={!event||event.index>=history.length-1} onClick={()=>setSelectedTurn((event?.index??0)+1)}>次の判断</Button><Button variant="outline" onClick={()=>setSelectedTurn(null)}>最新に戻る</Button></div></div><div className="turns">{history.map(t=><Button variant={event?.index===t.index?'default':'outline'} key={t.index} onClick={()=>setSelectedTurn(t.index)}>{t.index+1} · P{t.winner+1}</Button>)}</div><Chart label="公開ターンごとのゲーム得点推移" option={{tooltip:{trigger:'axis'},legend:{},xAxis:{type:'category',data:history.map(t=>t.index+1)},yAxis:{type:'value',name:'ゲーム得点'},series:game!.strategies.map((name,p)=>({name:`P${p+1} ${name}`,type:'line',step:'end',data:history.map(t=>t.game_scores[p])}))}}/></section>}
       {game&&event&&<DecisionInspector game={game} index={event.index} onAlgorithm={setQuickAlgorithm} onAnalysis={analysis} busy={busy}/>}
-    </>:<>
+    </>;
+  const experimentsView=<>
       <div className="section-title"><div><small>CONTROLLED EXPERIMENT</small><h2>戦術の成功は、勝利につながるか。</h2><p>共通配札と全座席順で、選んだ3戦略を比較します。</p></div><div className="actions"><label>独立配札数<input type="number" min={1} max={500} value={deals} onChange={e=>setDeals(Number(e.target.value))}/></label><Button disabled={busy} onClick={run}>{busy?'対戦中…':'比較実験を実行'}</Button></div></div>
       {!experiment?<div className="empty">実験結果はSQLiteに保存されます。まず20配札から比較を始めてください。</div>:<><p className="muted">{experiment.summary.games} 試合 · 情報条件: 不完全情報 · 実験ID {experiment.id}</p><div className="metrics">{metrics.map(([name,m])=><section className="panel" key={name}><small><AlgorithmLink name={name} onOpen={setQuickAlgorithm}/></small><strong>{percent(m.win_rate)}</strong><p>ゲーム勝率</p><p>単独勝利率 {metricPercent(m.sole_win_rate)}<br/>共同勝利率 {metricPercent(m.joint_win_rate)}<br/>平均累計得点 {metricValue(m.average_score)}<br/>平均終局報酬 {metricValue(m.average_terminal_reward)}</p><small>95%区間 {m.ci95?`${percent(m.ci95[0])} – ${percent(m.ci95[1])}`:'配札数が不足'}</small><p className="muted">ターン獲得 {percent(m.turn_win_rate)}<br/>直近最大100試合 {percent(m.recent_win_rate)}<br/>平均判断 {m.mean_decision_ms.toFixed(3)} ms</p></section>)}</div>
       <p className="muted">勝率＝単独勝利率＋共同勝利率（全員勝利を含む）。終局報酬の平均は勝率と異なる指標です。累計得点には加算しません。</p>{experiment.reward_compatibility&&<p className="muted">報酬の記録: 新形式 {experiment.reward_compatibility.recorded_games}試合 / 旧結果から補完 {experiment.reward_compatibility.derived_games}試合 / 不明 {experiment.reward_compatibility.unknown_games}試合</p>}<section className="panel evaluation-chart"><label>平均値の比較指標<select value={scoreMetric} onChange={e=>setScoreMetric(e.target.value as typeof scoreMetric)}><option value="terminal">平均終局報酬</option><option value="cumulative">平均累計得点</option></select></label><Chart label={scoreMetric==='terminal'?'戦略別平均終局報酬':'戦略別平均累計得点'} option={{tooltip:{trigger:'axis'},xAxis:{type:'category',data:metrics.map(([n])=>n)},yAxis:{type:'value',name:scoreMetric==='terminal'?'終局報酬':'累計得点',...(scoreMetric==='terminal'?{min:-2,max:2}:{})},series:[{type:'bar',data:metrics.map(([,m])=>(scoreMetric==='terminal'?m.average_terminal_reward:m.average_score)??null),itemStyle:{color:'#90e7ca'}}]}}/></section><div className="charts"><section className="panel"><h3>短期の獲得率と最終勝率</h3><Chart label="戦略別のターン獲得率とゲーム勝率" option={{legend:{},tooltip:{trigger:'axis'},xAxis:{type:'category',data:metrics.map(([n])=>n)},yAxis:{type:'value',max:1},series:[{name:'ターン獲得率',type:'bar',data:metrics.map(([,m])=>m.turn_win_rate)},{name:'ゲーム勝率',type:'bar',data:metrics.map(([,m])=>m.win_rate)}]}}/></section><section className="panel"><h3>試合数に対する勝率</h3><Chart label="累積勝率の推移" option={{legend:{},tooltip:{trigger:'axis'},xAxis:{type:'category',name:'試合',data:metrics[0]?.[1].cumulative_win_rates.map((_,i)=>i+1)},yAxis:{type:'value',max:1},series:metrics.map(([name,m])=>({name,type:'line',showSymbol:false,data:m.cumulative_win_rates}))}}/></section><section className="panel"><h3>ゲーム得点分布</h3><Chart label="戦略別ゲーム得点の度数分布" option={{legend:{},tooltip:{trigger:'axis'},xAxis:{type:'category',data:Array.from({length:20},(_,i)=>`${i*10}–${i*10+9}`)},yAxis:{type:'value',name:'試合数'},series:metrics.map(([name,m])=>({name,type:'bar',data:Array.from({length:20},(_,i)=>m.scores.filter(s=>Math.floor(s/10)===i).length)}))}}/></section><section className="panel"><h3>座席ごとのゲーム勝率</h3><Chart label="座席別ゲーム勝率" option={{legend:{},tooltip:{trigger:'axis'},xAxis:{type:'category',data:['P1','P2','P3']},yAxis:{type:'value',max:1},series:metrics.map(([name,m])=>({name,type:'bar',data:m.seat_win_rates}))}}/></section></div><p className="footnote">{experiment.summary.win_definition}<br/>{experiment.summary.confidence_method}。少数配札では区間が不安定です。計算時間は実行環境によって変動します。</p></>}
-    </>}
+    </>;
+  const views={game:gameView,experiments:experimentsView,catalog:<AlgorithmCatalog algorithms={catalog} selectedName={selectedAlgorithm} onSelect={setSelectedAlgorithm} error={catalogError} onReload={loadCatalog}/>,overview:<Overview navigate={setTab}/>,recent:<RecentExperiments navigate={setTab}/>};
+  const Screen=page?.component;
+  return <Workspace page={page} navigate={setTab}>
+    {(tab==='game'||tab==='experiments')&&<section className="toolbar"><label>配札シード<input type="number" value={seed} onChange={e=>setSeed(Number(e.target.value))}/></label>{strategies.map((name,p)=><div className="strategy-choice" key={p}><label>プレイヤー {p+1}<select value={name} onChange={e=>setStrategies(strategies.map((v,i)=>i===p?e.target.value:v))}>{available.map(n=><option key={n}>{n}</option>)}</select></label><AlgorithmLink name={name} onOpen={setQuickAlgorithm}/></div>)}<span className="muted">K最大 / A最小 · 同時選択 · 中位が勝利</span></section>}
+    {error&&<div role="alert" className="error">{error}</div>}
+    {Screen?<Screen views={views}/>:<section className="panel"><p>このURLに対応する画面はありません。画面一覧から移動してください。</p><Button onClick={()=>setTab('overview')}>研究ダッシュボードへ</Button></section>}
     {quickAlgorithm&&<AlgorithmQuickView name={quickAlgorithm} algorithm={catalog.find(a=>a.name===quickAlgorithm)} onClose={()=>setQuickAlgorithm(null)} onDetailed={()=>{setSelectedAlgorithm(quickAlgorithm);setTab('catalog');setQuickAlgorithm(null);}}/>}
     <footer>STRATEGY ARENA / 最中限研究環境 · ルールと公開範囲は暫定仕様 · 推論の高度化は今後の段階</footer>
-  </div>;
+  </Workspace>;
 }
 createRoot(document.getElementById('root')!).render(<React.StrictMode><App/></React.StrictMode>);
 

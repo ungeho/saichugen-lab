@@ -23,7 +23,9 @@ test('Arenaの候補・計画・結果・人工局面・保存履歴を確認す
  await page.setViewportSize({width:390,height:844});
  await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
  await page.screenshot({path:'test-results/strategy-arena-mobile.png',fullPage:true});
+ await page.getByRole('button',{name:'画面メニューを開く',exact:true}).click();
  await page.getByRole('button',{name:'ゲームルール',exact:true}).click();
+ await page.getByRole('button',{name:'画面メニューを開く',exact:true}).click();
  await page.getByRole('button',{name:'Strategy Arena',exact:true}).click();
  await expect(arena.getByLabel('Arenaの保存履歴').locator('option')).not.toHaveCount(1);
 });
