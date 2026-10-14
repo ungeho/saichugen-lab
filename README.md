@@ -336,3 +336,7 @@ Zigzag（強→弱）とReverse Zigzag（弱→強）を通常対局・観戦・
 ## Phase 35：適応停止の頑健性・実行時間検証
 
 「戦略研究 → 中間順位・意思決定研究 → Stopping Robustness & Runtime Validation Lab」で、固定した停止規則を直接実行し、実測wall/CPU時間と独立終局報酬を比較できます。開発Pilotと独立検証を区別し、実行順序・測定環境・再構成一致・未評価層を保存します。詳細は[Phase 35](docs/phase35.md)。URL表示だけでは実行せず、条件登録後に開始を明示します。
+
+## Phase 36：実行時間ノイズ・判断分岐研究
+
+「戦略研究 → 中間順位・意思決定研究 → Runtime Noise & Decision Divergence Lab」で、Series R（同一入力の時間反復）とSeries D（未使用配札での判断分岐・独立報酬）を別Planとして実行できます。warmupと測定、通常群とprofile群を分離し、64bit seedは文字列で保持します。詳細は[Phase 36](docs/phase36.md)。条件を登録し開始を明示するまで計算は実行しません。

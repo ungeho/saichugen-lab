@@ -39,6 +39,7 @@ from ..experiments.zigzag_lab import zigzag_template,zigzag_result,zigzag_histor
 from ..experiments.middle_lab import MiddleJobs,MiddleConfig,middle_estimate
 from ..experiments.stratification_lab import StratificationJobs,StratificationConfig,stratification_estimate
 from ..experiments.decision_lab import DecisionJobs,DecisionConfig,decision_estimate
+from ..experiments.noise_lab import StudyJobs as NoiseJobs,StudyConfig as NoiseConfig
 from ..experiments.runtime_lab import RuntimeJobs,RuntimeConfig
 from ..experiments.horizon_lab import HorizonJobs,HorizonConfig
 from ..experiments.stopping_lab import StoppingJobs,StoppingConfig
@@ -117,6 +118,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         yield
         jobs.close()
         quality.close()
+        noise_lab.close()
         runtime_lab.close()
         horizon.close()
         stopping_lab.close()
@@ -147,6 +149,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     stopping_lab=StoppingJobs(store,design,evidence)
     horizon=HorizonJobs(store,design,evidence)
     runtime_lab=RuntimeJobs(store,design,evidence)
+    noise_lab=NoiseJobs(store,design,evidence)
 
     def evolution_call(action):
         try:return action()
@@ -210,6 +213,24 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     class MiddleLink(BaseModel):
         series_id:str
         version:int=Field(default=1,ge=1)
+
+    @app.post('/api/runtime-divergence/estimate')
+    def noise_preview(request:NoiseConfig):return evolution_call(lambda:noise_lab.estimate(request))
+    @app.post('/api/runtime-divergence/jobs',status_code=201)
+    def noise_register(request:NoiseConfig):return evolution_call(lambda:noise_lab.register(request))
+    @app.get('/api/runtime-divergence/jobs')
+    def noise_history():return noise_lab.history()
+    @app.get('/api/runtime-divergence/jobs/{identifier}')
+    @app.get('/api/runtime-divergence/jobs/{identifier}/export')
+    def noise_read(identifier:str):return evolution_call(lambda:noise_lab.get(identifier))
+    @app.post('/api/runtime-divergence/jobs/{identifier}/start',status_code=202)
+    def noise_start(identifier:str,request:MiddleStart):return evolution_call(lambda:noise_lab.start(identifier,request.condition_hash))
+    @app.post('/api/runtime-divergence/jobs/{identifier}/cancel')
+    def noise_cancel(identifier:str):return evolution_call(lambda:noise_lab.cancel(identifier))
+    @app.post('/api/runtime-divergence/jobs/{identifier}/design-draft',status_code=201)
+    def noise_draft(identifier:str):return evolution_call(lambda:noise_lab.design_draft(identifier))
+    @app.post('/api/runtime-divergence/jobs/{identifier}/evidence',status_code=201)
+    def noise_link(identifier:str,request:MiddleLink):return evolution_call(lambda:noise_lab.link_evidence(identifier,request.series_id,request.version))
 
     @app.post('/api/stopping-runtime/estimate')
     def runtime_preview(request:RuntimeConfig):return evolution_call(lambda:runtime_lab.estimate(request))

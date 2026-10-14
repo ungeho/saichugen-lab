@@ -1,3 +1,4 @@
+import {NoisePanel} from '../noise/NoisePanel';
 import {RuntimePanel} from '../runtime/RuntimePanel';
 import {HorizonPanel} from '../horizon/HorizonPanel';
 import {StoppingPanel} from '../stopping/StoppingPanel';
@@ -24,7 +25,7 @@ export type PageProps = {views:Record<string,ReactNode>};
 const bound = (id:string) => ({views}:PageProps) => <>{views[id]}</>;
 export const screenComponents:Record<string,ComponentType<PageProps>> = {
   overview:bound('overview'), recent:bound('recent'), game:bound('game'), experiments:bound('experiments'), catalog:bound('catalog'),
-  runtime:RuntimePanel, horizon:HorizonPanel, stopping:StoppingPanel, adaptive:()=> <AdaptivePanel/>, reliability:ReliabilityPanel, decision:DecisionPanel, stratification:StratificationPanel, middle:MiddlePanel,
+  noise:NoisePanel, runtime:RuntimePanel, horizon:HorizonPanel, stopping:StoppingPanel, adaptive:()=> <AdaptivePanel/>, reliability:ReliabilityPanel, decision:DecisionPanel, stratification:StratificationPanel, middle:MiddlePanel,
   zigzag:ZigzagPanel, theory:TheoryLabPanel, evolution:EvolutionPanel, arena:StrategyArena,
   design:DesignPanel, evidence:EvidencePanel, evaluation:EvaluationPanel, quality:()=> <QualityStudyPanel/>, rules:RulesPage,
 };
@@ -36,6 +37,7 @@ export const pages:ResearchPage[] = [
   define('game','対戦テーブル','play','/play','game 人間 AI 観戦'),
   define('experiments','比較実験','play','/compare','comparison 一括 統計'),
   define('arena','Strategy Arena','play','/arena','宣言的 戦略 対戦','/api/arena/studies'),
+  define('noise','Runtime Noise & Decision Divergence Lab','research','/research/runtime-divergence','時間ノイズ 判断分岐 noise divergence','/api/runtime-divergence/jobs','middle'),
   define('runtime','Stopping Robustness & Runtime Validation Lab','research','/research/stopping-runtime','停止 頑健性 実時間 runtime','/api/stopping-runtime/jobs','middle'),
   define('horizon','Stopping Generalization & Budget Horizon Lab','research','/research/stopping-horizon','停止 予算上限 horizon','/api/stopping-horizon/jobs','middle'),
   define('stopping','Adaptive Stopping Validation Lab','research','/research/stopping','適応停止 独立検証','/api/stopping/jobs','middle'),
