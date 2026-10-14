@@ -39,6 +39,7 @@ from ..experiments.zigzag_lab import zigzag_template,zigzag_result,zigzag_histor
 from ..experiments.middle_lab import MiddleJobs,MiddleConfig,middle_estimate
 from ..experiments.stratification_lab import StratificationJobs,StratificationConfig,stratification_estimate
 from ..experiments.decision_lab import DecisionJobs,DecisionConfig,decision_estimate
+from ..experiments.runtime_lab import RuntimeJobs,RuntimeConfig
 from ..experiments.horizon_lab import HorizonJobs,HorizonConfig
 from ..experiments.stopping_lab import StoppingJobs,StoppingConfig
 from ..experiments.adaptive_lab import AdaptiveJobs,AdaptiveConfig
@@ -116,6 +117,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         yield
         jobs.close()
         quality.close()
+        runtime_lab.close()
         horizon.close()
         stopping_lab.close()
         adaptive.close()
@@ -144,6 +146,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     adaptive=AdaptiveJobs(store,design,evidence)
     stopping_lab=StoppingJobs(store,design,evidence)
     horizon=HorizonJobs(store,design,evidence)
+    runtime_lab=RuntimeJobs(store,design,evidence)
 
     def evolution_call(action):
         try:return action()
@@ -207,6 +210,24 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     class MiddleLink(BaseModel):
         series_id:str
         version:int=Field(default=1,ge=1)
+
+    @app.post('/api/stopping-runtime/estimate')
+    def runtime_preview(request:RuntimeConfig):return evolution_call(lambda:runtime_lab.estimate(request))
+    @app.post('/api/stopping-runtime/jobs',status_code=201)
+    def runtime_register(request:RuntimeConfig):return evolution_call(lambda:runtime_lab.register(request))
+    @app.get('/api/stopping-runtime/jobs')
+    def runtime_history():return runtime_lab.history()
+    @app.get('/api/stopping-runtime/jobs/{identifier}')
+    @app.get('/api/stopping-runtime/jobs/{identifier}/export')
+    def runtime_read(identifier:str):return evolution_call(lambda:runtime_lab.get(identifier))
+    @app.post('/api/stopping-runtime/jobs/{identifier}/start',status_code=202)
+    def runtime_start(identifier:str,request:MiddleStart):return evolution_call(lambda:runtime_lab.start(identifier,request.condition_hash))
+    @app.post('/api/stopping-runtime/jobs/{identifier}/cancel')
+    def runtime_cancel(identifier:str):return evolution_call(lambda:runtime_lab.cancel(identifier))
+    @app.post('/api/stopping-runtime/jobs/{identifier}/design-draft',status_code=201)
+    def runtime_draft(identifier:str):return evolution_call(lambda:runtime_lab.design_draft(identifier))
+    @app.post('/api/stopping-runtime/jobs/{identifier}/evidence',status_code=201)
+    def runtime_link(identifier:str,request:MiddleLink):return evolution_call(lambda:runtime_lab.link_evidence(identifier,request.series_id,request.version))
 
     @app.post('/api/stopping-horizon/estimate')
     def horizon_preview(request:HorizonConfig):return evolution_call(lambda:horizon.estimate(request))
