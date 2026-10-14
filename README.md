@@ -282,3 +282,7 @@ Phase 18のStage 1（2配札・8/16試行）はプリセットから選択でき
 ### Evidence Accumulation Lab（Phase 25）
 
 完了PlanをEvidence Seriesへ関連付け、追加独立配札による平均報酬差・ばらつき・計算時間の変化を確認できます。実配札の重複と条件不一致を拒否し、構成別の収束グラフ、追加予算見積もり、次のDraft提案を表示します。途中区間は探索的な診断であり、逐次的な採用・棄却を保証しません。使い方と実測は[docs/phase25.md](docs/phase25.md)を参照してください。既存のWindows起動手順は維持しています。
+
+### Zigzag Strategy Lab（Phase 26）
+
+Zigzag（強→弱）とReverse Zigzag（弱→強）を通常対局・観戦・比較・実験で選択できます。専用Labでは事前登録してカード消費、序盤・中盤・終盤のターン順位、ラウンドと累積順位、単独2位・同点・終局報酬を比較します。中央札が残ることは勝利を保証しません。詳細は[docs/phase26.md](docs/phase26.md)を参照してください。Windowsのsetup.ps1／dev.ps1の手順は維持しています。

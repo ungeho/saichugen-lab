@@ -35,6 +35,7 @@ from ..experiments.evaluation_lab import EvaluationJobs, EvaluationRequest, abla
 from ..experiments.evaluation_statistics import PlanningInput,plan_samples
 from ..experiments.design_lab import DesignLab,PlanSpec,DesignPlanningInput,design_sample_plan,AllocationRequest,allocate,pilot_template
 from ..experiments.evidence_lab import EvidenceLab,SeriesSpec,EvidenceSource,Projection
+from ..experiments.zigzag_lab import zigzag_template,zigzag_result,zigzag_history
 from ..rule_guide import rule_guide, judge
 from contextlib import asynccontextmanager
 
@@ -179,6 +180,15 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
 
     @app.post('/api/design/recommendations/{identifier}/draft',status_code=201)
     def design_recommended(identifier:str,request:RecommendedPlan):return evolution_call(lambda:design.recommended_draft(identifier,request.index))
+
+    @app.post('/api/zigzag/template')
+    def zigzag_plan_template():return zigzag_template().model_dump(mode='json')
+
+    @app.get('/api/zigzag/plans')
+    def zigzag_list():return zigzag_history(design)
+
+    @app.get('/api/zigzag/plans/{identifier}/{version}')
+    def zigzag_read(identifier:str,version:int):return evolution_call(lambda:zigzag_result(design,identifier,version))
 
     @app.get('/api/evidence/series')
     def evidence_history():return evidence.history()

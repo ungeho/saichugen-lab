@@ -1,0 +1,20 @@
+import {test,expect} from '@playwright/test';
+test('Zigzagを通常対局と図鑑で選び、登録実験で順位とEvidenceを見る',async({page,request})=>{
+ test.setTimeout(60000);
+ const catalog=await(await request.get('/api/algorithms')).json();expect(catalog.some((x:{name:string})=>x.name==='Zigzag')).toBeTruthy();
+ await page.goto('/');await page.getByRole('button',{name:'Zigzag Strategy Lab',exact:true}).click();
+ const panel=page.getByRole('region',{name:'Zigzag Strategy Lab'});
+ await panel.getByRole('button',{name:'Zigzagの計画案を準備',exact:true}).click();
+ const editor=panel.getByLabel('Zigzag Plan JSON');await expect(editor).not.toHaveValue('');const spec=JSON.parse(await editor.inputValue());const stamp=Date.now();spec.plan_id='zigzag-ui-'+stamp;spec.evaluation.deals=1;spec.evaluation.start_offset=80000+(stamp%10000);
+ await editor.fill(JSON.stringify(spec));await panel.getByRole('button',{name:'時間と対局数を見積もる',exact:true}).click();await expect(panel).toContainText('72');
+ await panel.getByRole('button',{name:'Zigzag Draftを保存',exact:true}).click();await expect(panel.getByRole('button',{name:'Zigzag実験を開始',exact:true})).toBeDisabled();
+ await panel.getByRole('button',{name:'Zigzagを事前登録',exact:true}).click();await panel.getByRole('button',{name:'Zigzag実験を開始',exact:true}).click();
+ await expect(panel.getByRole('status').first()).toContainText('Completed',{timeout:30000});
+ await expect(panel.getByRole('img',{name:'時間区分別ターン順位',exact:true})).toBeVisible();await expect(panel.getByRole('img',{name:'初期手札内順位の消費順',exact:true})).toBeVisible();
+ await expect(panel).toContainText('Reverse Zigzag');await expect(panel).toContainText('単独2位');
+ const d=page.waitForEvent('download');await panel.getByRole('button',{name:'Zigzag結果JSONを保存',exact:true}).click();expect((await d).suggestedFilename()).toContain('zigzag-');
+ await panel.getByRole('button',{name:'探索的Evidence Seriesへ関連付ける',exact:true}).click();await expect(panel.getByRole('status').last()).toContainText('Evidence Seriesへ保存しました',{timeout:20000});
+ await page.setViewportSize({width:390,height:844});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+ const game=await(await request.post('/api/games',{data:{seed:72,strategies:['Zigzag','Reverse Zigzag','Random']}})).json();
+ expect(game.id).toBeTruthy();
+});

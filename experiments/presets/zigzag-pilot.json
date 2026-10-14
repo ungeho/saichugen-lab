@@ -1,0 +1,76 @@
+{
+  "plan_id": "zigzag-pilot",
+  "version": 1,
+  "parent_version": null,
+  "created_at": "2026-10-13T13:46:39.632778Z",
+  "reason": "H1は構造テスト、H2–H5は未検証の探索仮説。H6は公開列の必要条件だけを診断。",
+  "hypothesis": "序盤の極端な札の消費と終盤の中央札の保持が、ターン順位・累積順位・終局報酬へどう影響するかを共通配札で診断する。",
+  "interpretation": "exploratory",
+  "references": [],
+  "pilot_in_confirmatory": "excluded",
+  "evaluation": {
+    "name": "Zigzag順位パイロット",
+    "participants": [
+      "Random",
+      "Greedy",
+      "ScoreAware",
+      "Heuristic",
+      "Zigzag",
+      "Reverse Zigzag"
+    ],
+    "opponents": [
+      {
+        "name": "Random / Heuristic",
+        "strategies": [
+          "Random",
+          "Heuristic"
+        ]
+      },
+      {
+        "name": "Greedy / ScoreAware",
+        "strategies": [
+          "Greedy",
+          "ScoreAware"
+        ]
+      }
+    ],
+    "deals": 4,
+    "start_offset": 5000,
+    "seed_partition": "development",
+    "policy_seed": 42,
+    "include_expensive": false,
+    "timeout_seconds": 60,
+    "alpha": 0.05,
+    "minimum_effect": 0.5,
+    "power": 0.8,
+    "max_deals": 1000,
+    "weights": null,
+    "purpose": "comparison",
+    "evolution_id": null,
+    "evaluation_mode": "fixed",
+    "capture_rank_trace": true,
+    "deal_layout": "shared",
+    "composition_deals": null,
+    "family_size": null
+  },
+  "between_opponents": true,
+  "statistics": {
+    "method": "fixed_hoeffding",
+    "correction": "bonferroni",
+    "null": "contrast_mean=0",
+    "alternative": "contrast_mean!=0",
+    "metric": "terminal_reward",
+    "aggregation": "deal_mean_all_6",
+    "stop": "fixed_n_or_budget_or_user_cancel",
+    "time_handling": "diagnostic_and_budget",
+    "decision_threshold": 0.0,
+    "max_decision_time_ratio": 2.0
+  },
+  "budget": {
+    "max_independent_deals": 4,
+    "max_games": 288,
+    "max_rollouts": 0,
+    "allowed_seconds": 60,
+    "measured_seconds_per_deal_composition": null
+  }
+}

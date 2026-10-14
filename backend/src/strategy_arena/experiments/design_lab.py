@@ -100,7 +100,7 @@ class DesignPlanningInput(PlanningInput):
     max_games:int=Field(default=360,strict=True,ge=1,le=360)
     contrast_bound:Literal[4,8]=4
     opponent_count:int=Field(default=2,strict=True,ge=1,le=4)
-    setting_count:int=Field(default=2,strict=True,ge=2,le=5)
+    setting_count:int=Field(default=2,strict=True,ge=2,le=6)
     rotations:Literal[6]=6
     shared_deals:bool=Field(default=True,strict=True)
     allowed_seconds:float=Field(default=120,gt=0,le=100000,allow_inf_nan=False)

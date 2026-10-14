@@ -27,7 +27,7 @@ class Opponents(BaseModel):
 class EvaluationRequest(BaseModel):
     model_config=ConfigDict(extra='forbid')
     name:str=Field(default='固定標本評価',min_length=1,max_length=100)
-    participants:list[str]=Field(min_length=2,max_length=5)
+    participants:list[str]=Field(min_length=2,max_length=6)
     opponents:list[Opponents]=Field(min_length=1,max_length=4)
     deals:int=Field(default=2,strict=True,ge=1,le=20)
     start_offset:int=Field(default=600,strict=True,ge=0,le=999900)
@@ -43,6 +43,7 @@ class EvaluationRequest(BaseModel):
     purpose:Literal['comparison','reserve_ablation','adaptive_ablation']='comparison'
     evolution_id:str|None=None
     evaluation_mode:Literal['fixed']='fixed'
+    capture_rank_trace:bool=Field(default=False,strict=True)
     deal_layout:Literal['distinct','shared']='distinct'
     composition_deals:list[int]|None=Field(default=None,min_length=1,max_length=4)
     family_size:int|None=Field(default=None,strict=True,ge=1,le=100)
@@ -66,7 +67,7 @@ class EvaluationRequest(BaseModel):
     def plans(self,definitions):
         plans=[ArenaRequest(participants=self.participants,opponents=o.strategies,deals=self.counts[i],
             start_offset=self.start_offset+(0 if self.deal_layout=='shared' else sum(self.counts[:i])),seed_partition=self.seed_partition,policy_seed=self.policy_seed,
-            include_expensive=self.include_expensive,timeout_seconds=self.timeout_seconds).resolve(definitions) for i,o in enumerate(self.opponents)]
+            include_expensive=self.include_expensive,timeout_seconds=self.timeout_seconds,capture_rank_trace=self.capture_rank_trace).resolve(definitions) for i,o in enumerate(self.opponents)]
         estimates=[arena_estimate(p) for p in plans]
         if sum(e['games'] for e in estimates)>360 or sum(e['rollout_upper_bound'] for e in estimates)>250000:raise ValueError('全構成合計で360対局・25万Rollout以内へ分割してください')
         return plans

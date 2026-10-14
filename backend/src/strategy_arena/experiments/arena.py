@@ -74,6 +74,7 @@ class ArenaPlan(BaseModel):
     seed_partition:Literal['development','validation','final']='development'
     include_expensive:bool=Field(default=False,strict=True)
     analyze_position:bool=True
+    capture_rank_trace:bool=Field(default=False,strict=True)
     timeout_seconds:int=Field(default=180,strict=True,ge=1,le=300)
 
     @property
@@ -101,11 +102,13 @@ class ArenaRequest(BaseModel):
     include_expensive:bool=Field(default=False,strict=True)
     timeout_seconds:int=Field(default=180,strict=True,ge=1,le=300)
 
+    capture_rank_trace:bool=Field(default=False,strict=True)
+
     def resolve(self,definitions):
         def entry(ref):return ArenaEntry(reference=ref,definition=definitions.get(ref) if '@' in ref else None)
         return ArenaPlan(settings=[entry(r) for r in self.participants],opponent_entries=tuple(entry(r) for r in self.opponents),
             deal_seeds=[PARTITIONS[self.seed_partition]+self.start_offset+i for i in range(self.deals)],
-            policy_seed=self.policy_seed,seed_partition=self.seed_partition,include_expensive=self.include_expensive,timeout_seconds=self.timeout_seconds)
+            policy_seed=self.policy_seed,seed_partition=self.seed_partition,include_expensive=self.include_expensive,timeout_seconds=self.timeout_seconds,capture_rank_trace=self.capture_rank_trace)
 
 
 def arena_estimate(config,historical=()):
@@ -142,7 +145,11 @@ def run_arena(config,on_row=lambda r:None,check=lambda:None,on_partial=lambda r:
                 try:game,_,_=_play_game(deal,names,False,False,strategies=policies,rngs=rngs,check=check)
                 except Exception:
                     on_partial({'setting':setting.identifier,'deal_id':str(deal),'rotation':rotation,'game_elapsed_ns':perf_counter_ns()-started,'decisions':policies[seat].samples});raise
-                on_row({'setting':setting.identifier,'deal_id':str(deal),'seed':deal,'rotation':rotation,'roles':roles,'seat':seat,
+                trace={}
+                if config.capture_rank_trace:
+                    from .zigzag_analysis import rank_trace
+                    trace={'rank_trace':rank_trace(deal,game.observe(seat).history,seat)}
+                on_row({**trace,'setting':setting.identifier,'deal_id':str(deal),'seed':deal,'rotation':rotation,'roles':roles,'seat':seat,
                     'strategies':names,'rollout_parameters':setting.model_dump(mode='json'),'strategy_version':setting.strategy_version,
                     'scores':game.observe(0).game_scores,'winners':game.winners,'terminal_rewards':terminal_rewards(game.winners),
                     'game_elapsed_ns':perf_counter_ns()-started,'decisions':policies[seat].samples,

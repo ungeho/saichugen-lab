@@ -67,3 +67,7 @@ from .declarative import builtin_definitions, DeclarativeStrategy, description a
 
 for definition in builtin_definitions():
     register(definition.id,lambda d=definition:DeclarativeStrategy(d),declarative_description(definition))
+
+from .zigzag import Zigzag,description as zigzag_description
+register('Zigzag',Zigzag,zigzag_description())
+register('Reverse Zigzag',lambda:Zigzag(True),zigzag_description(True))
