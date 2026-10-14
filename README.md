@@ -18,6 +18,12 @@ Python 3.12+ / uv / FastAPI / NumPy / SQLite と、React / TypeScript / Vite / p
 
 画面一覧・URL・追加方法・検証の詳細は [Phase 31設計資料](docs/phase31.md) を参照してください。Windowsのセットアップ・起動スクリプトは従来どおり利用できます。
 
+## 適応サンプリング・独立参照研究（Phase 32）
+
+「戦略研究 → 中間順位・意思決定研究 → Adaptive Sampling & Independent Reference Lab」で、Fixed、Gap-Adaptive、Uncertainty-Adaptiveを比較できます。事前登録した予算・閾値で実行し、選択・独立参照選択・独立最終評価を分離します。派生対局数、シミュレーション手番、独立評価報酬、Fixed差・Self-Middle差・符号付きRegretを確認できます。適応方式の優位性や参照札の最適性を保証するものではありません。
+
+`/research/adaptive?experiment=<保存実験ID>`で結果へ直接アクセスできます。表示だけでは再実行しません。設定のJSON保存、進捗・停止、SQLite履歴、Experiment Planの追試Draft、既存Evidence Seriesへの参照に対応しています。使い方、CLI、予算の意味、約14.64秒の小規模パイロット、統計上の制限は [Phase 32](docs/phase32.md) を参照してください。
+
 ## 実装済みの基本機能
 
 - Pythonゲームエンジン、3ターン×5ラウンド、得点各層、共同勝利、完全リプレイ。

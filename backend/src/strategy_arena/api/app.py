@@ -39,6 +39,7 @@ from ..experiments.zigzag_lab import zigzag_template,zigzag_result,zigzag_histor
 from ..experiments.middle_lab import MiddleJobs,MiddleConfig,middle_estimate
 from ..experiments.stratification_lab import StratificationJobs,StratificationConfig,stratification_estimate
 from ..experiments.decision_lab import DecisionJobs,DecisionConfig,decision_estimate
+from ..experiments.adaptive_lab import AdaptiveJobs,AdaptiveConfig
 from ..experiments.reliability_lab import ReliabilityJobs,ReliabilityConfig
 from ..rule_guide import rule_guide, judge
 from contextlib import asynccontextmanager
@@ -113,6 +114,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         yield
         jobs.close()
         quality.close()
+        adaptive.close()
         reliability.close()
         decision.close()
         stratification.close()
@@ -135,6 +137,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     stratification=StratificationJobs(store,design,evidence)
     decision=DecisionJobs(store,design,evidence)
     reliability=ReliabilityJobs(store,design,evidence)
+    adaptive=AdaptiveJobs(store,design,evidence)
 
     def evolution_call(action):
         try:return action()
@@ -198,6 +201,24 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     class MiddleLink(BaseModel):
         series_id:str
         version:int=Field(default=1,ge=1)
+
+    @app.post('/api/adaptive/estimate')
+    def adaptive_preview(request:AdaptiveConfig):return evolution_call(lambda:adaptive.estimate(request))
+    @app.post('/api/adaptive/jobs',status_code=201)
+    def adaptive_register(request:AdaptiveConfig):return evolution_call(lambda:adaptive.register(request))
+    @app.get('/api/adaptive/jobs')
+    def adaptive_history():return adaptive.history()
+    @app.get('/api/adaptive/jobs/{identifier}')
+    @app.get('/api/adaptive/jobs/{identifier}/export')
+    def adaptive_read(identifier:str):return evolution_call(lambda:adaptive.get(identifier))
+    @app.post('/api/adaptive/jobs/{identifier}/start',status_code=202)
+    def adaptive_start(identifier:str,request:MiddleStart):return evolution_call(lambda:adaptive.start(identifier,request.condition_hash))
+    @app.post('/api/adaptive/jobs/{identifier}/cancel')
+    def adaptive_cancel(identifier:str):return evolution_call(lambda:adaptive.cancel(identifier))
+    @app.post('/api/adaptive/jobs/{identifier}/design-draft',status_code=201)
+    def adaptive_draft(identifier:str):return evolution_call(lambda:adaptive.design_draft(identifier))
+    @app.post('/api/adaptive/jobs/{identifier}/evidence',status_code=201)
+    def adaptive_link(identifier:str,request:MiddleLink):return evolution_call(lambda:adaptive.link_evidence(identifier,request.series_id,request.version))
 
     @app.post('/api/reliability/estimate')
     def reliability_preview(request:ReliabilityConfig):return evolution_call(lambda:reliability.estimate(request))

@@ -1,3 +1,4 @@
+import {AdaptivePanel} from '../adaptive/AdaptivePanel';
 import type {ComponentType, ReactNode} from 'react';
 import {ReliabilityPanel} from '../reliability/ReliabilityPanel';
 import {DecisionPanel} from '../decision/DecisionPanel';
@@ -20,7 +21,7 @@ export type PageProps = {views:Record<string,ReactNode>};
 const bound = (id:string) => ({views}:PageProps) => <>{views[id]}</>;
 export const screenComponents:Record<string,ComponentType<PageProps>> = {
   overview:bound('overview'), recent:bound('recent'), game:bound('game'), experiments:bound('experiments'), catalog:bound('catalog'),
-  reliability:ReliabilityPanel, decision:DecisionPanel, stratification:StratificationPanel, middle:MiddlePanel,
+  adaptive:AdaptivePanel, reliability:ReliabilityPanel, decision:DecisionPanel, stratification:StratificationPanel, middle:MiddlePanel,
   zigzag:ZigzagPanel, theory:TheoryLabPanel, evolution:EvolutionPanel, arena:StrategyArena,
   design:DesignPanel, evidence:EvidencePanel, evaluation:EvaluationPanel, quality:()=> <QualityStudyPanel/>, rules:RulesPage,
 };
@@ -32,6 +33,7 @@ export const pages:ResearchPage[] = [
   define('game','対戦テーブル','play','/play','game 人間 AI 観戦'),
   define('experiments','比較実験','play','/compare','comparison 一括 統計'),
   define('arena','Strategy Arena','play','/arena','宣言的 戦略 対戦','/api/arena/studies'),
+  define('adaptive','Adaptive Sampling & Independent Reference Lab','research','/research/adaptive','適応 サンプリング 独立参照','/api/adaptive/jobs','middle'),
   define('reliability','Decision Reliability Lab','research','/research/reliability','信頼性 予算 乱数','/api/reliability/jobs','middle'),
   define('decision','Middle-Position Decision Lab','research','/research/decision','中間順位 意思決定','/api/decision/jobs','middle'),
   define('stratification','Middle-Position Stratification Lab','research','/research/stratification','中間順位 層別','/api/stratification/jobs','middle'),
@@ -61,4 +63,3 @@ export function validateRegistry(registry:ResearchPage[],components=Object.keys(
 validateRegistry(pages);
 export const findPage = (path:string) => pages.find(p=>p.path===(path==='/'?'/play':path.replace(/\/$/,'')));
 export const matchPages = (text:string) => pages.filter(p=>`${p.title} ${p.keywords} ${categories[p.category]}`.toLocaleLowerCase().includes(text.trim().toLocaleLowerCase()));
-
