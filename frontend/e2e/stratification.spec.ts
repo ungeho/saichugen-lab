@@ -1,0 +1,21 @@
+import {test,expect} from '@playwright/test';
+test('層別Planの登録・合法局面比較・フィルター・研究参照と停止',async({page,request})=>{
+ const stamp=Date.now();await page.goto('/');await page.getByRole('button',{name:'Middle-Position Stratification Lab',exact:true}).click();
+ const panel=page.getByRole('region',{name:'Middle-Position Stratification Lab'});
+ const config={name:'strata-ui-'+stamp,deals:1,start_offset:220000+stamp%20000,validation_offset:240000+stamp%20000,turns:[3,6,11,12],max_positions:3,controls:0,trials:2,validation_trials:10,max_validate:1,reproduce:false,timeout_seconds:60};
+ await panel.getByLabel('層別Plan JSON').fill(JSON.stringify(config));
+ await panel.getByRole('button',{name:'層別実験を見積もる',exact:true}).click();await expect(panel).toContainText('collection_games');
+ await panel.getByRole('button',{name:'層別条件を登録',exact:true}).click();await expect(panel.getByRole('status').first()).toContainText('Registered');
+ await panel.getByRole('button',{name:'登録Hashで層別実験を開始',exact:true}).click();await expect(panel.getByRole('status').first()).toContainText('Completed',{timeout:30000});
+ await expect(panel.getByRole('img',{name:'層別局面の局所順位と報酬',exact:true})).toBeVisible();
+ await expect(panel).toContainText('自分の手札');await expect(panel).toContainText('初期配札Hash');await expect(panel).toContainText('相手A2位');
+ await panel.getByRole('combobox',{name:'得点差の大きさ',exact:true}).selectOption('both_small');await panel.getByRole('combobox',{name:'得点差の大きさ',exact:true}).selectOption('');
+ await panel.getByRole('combobox',{name:'得点順位層',exact:true}).selectOption('tie');await expect(panel).toContainText('この条件に分析済み局面はありません');await panel.getByRole('combobox',{name:'得点順位層',exact:true}).selectOption('strict_middle');
+ const download=page.waitForEvent('download');await panel.getByRole('button',{name:'層別JSONを保存',exact:true}).click();expect((await download).suggestedFilename()).toContain('stratification-');
+ await panel.getByRole('button',{name:'Evidenceへ参照リンクを保存',exact:true}).click();await expect(panel.getByRole('status').last()).toContainText('"aggregated": false');
+ await panel.getByRole('button',{name:'別条件のDesign Draftを作る',exact:true}).click();await expect(panel.getByRole('status').last()).toContainText('Draft');
+ await page.setViewportSize({width:390,height:844});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+ const r=await(await request.post('/api/stratification/jobs',{data:{...config,start_offset:config.start_offset+100,validation_offset:config.validation_offset+100}})).json();
+ expect((await request.post('/api/stratification/jobs/'+r.id+'/cancel',{data:{}})).status()).toBe(200);
+ expect((await(await request.get('/api/stratification/jobs/'+r.id+'/export')).json()).status).toBe('Cancelled');
+});

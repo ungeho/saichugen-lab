@@ -1,0 +1,42 @@
+{
+  "name": "Phase 28 fixed strict-middle pilot",
+  "deals": 4,
+  "start_offset": 9000,
+  "validation_offset": 9000,
+  "turns": [
+    3,
+    6,
+    9,
+    11,
+    12,
+    13,
+    14
+  ],
+  "collectors": [
+    "Random",
+    "Heuristic",
+    "ScoreAware",
+    "Zigzag",
+    "Reverse Zigzag"
+  ],
+  "definition": {
+    "version": "strict-middle-v1",
+    "small": 5,
+    "large": 10,
+    "balance_tolerance": 0
+  },
+  "max_positions": 12,
+  "controls": 2,
+  "trials": 8,
+  "validation_trials": 32,
+  "max_validate": 2,
+  "continuation": [
+    "Random",
+    "Random",
+    "Random"
+  ],
+  "policy_seed": 42,
+  "reproduce": false,
+  "timeout_seconds": 120,
+  "hypothesis": "Strict middle: test G1 reversal, G2 positive opponent gap enlargement, G3 next-boundary maintenance and G4 terminal reward separately. Exploratory only."
+}

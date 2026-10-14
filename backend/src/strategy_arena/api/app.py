@@ -37,6 +37,7 @@ from ..experiments.design_lab import DesignLab,PlanSpec,DesignPlanningInput,desi
 from ..experiments.evidence_lab import EvidenceLab,SeriesSpec,EvidenceSource,Projection
 from ..experiments.zigzag_lab import zigzag_template,zigzag_result,zigzag_history
 from ..experiments.middle_lab import MiddleJobs,MiddleConfig,middle_estimate
+from ..experiments.stratification_lab import StratificationJobs,StratificationConfig,stratification_estimate
 from ..rule_guide import rule_guide, judge
 from contextlib import asynccontextmanager
 
@@ -110,6 +111,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         yield
         jobs.close()
         quality.close()
+        stratification.close()
         middle.close()
         design.close()
         evaluation.close()
@@ -126,6 +128,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     design=DesignLab(store,definitions,evaluation,evolution)
     evidence=EvidenceLab(store,design)
     middle=MiddleJobs(store,design,evidence)
+    stratification=StratificationJobs(store,design,evidence)
 
     def evolution_call(action):
         try:return action()
@@ -189,6 +192,24 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     class MiddleLink(BaseModel):
         series_id:str
         version:int=Field(default=1,ge=1)
+
+    @app.post('/api/stratification/estimate')
+    def stratification_preview(request:StratificationConfig):return stratification_estimate(request)
+    @app.post('/api/stratification/jobs',status_code=201)
+    def stratification_register(request:StratificationConfig):return evolution_call(lambda:stratification.register(request))
+    @app.get('/api/stratification/jobs')
+    def stratification_history():return stratification.history()
+    @app.get('/api/stratification/jobs/{identifier}')
+    @app.get('/api/stratification/jobs/{identifier}/export')
+    def stratification_read(identifier:str):return evolution_call(lambda:stratification.get(identifier))
+    @app.post('/api/stratification/jobs/{identifier}/start',status_code=202)
+    def stratification_start(identifier:str,request:MiddleStart):return evolution_call(lambda:stratification.start(identifier,request.condition_hash))
+    @app.post('/api/stratification/jobs/{identifier}/cancel')
+    def stratification_cancel(identifier:str):return evolution_call(lambda:stratification.cancel(identifier))
+    @app.post('/api/stratification/jobs/{identifier}/design-draft',status_code=201)
+    def stratification_draft(identifier:str):return evolution_call(lambda:stratification.design_draft(identifier))
+    @app.post('/api/stratification/jobs/{identifier}/evidence',status_code=201)
+    def stratification_link(identifier:str,request:MiddleLink):return evolution_call(lambda:stratification.link_evidence(identifier,request.series_id,request.version))
 
     @app.post('/api/middle/estimate')
     def middle_preview(request:MiddleConfig):return middle_estimate(request)

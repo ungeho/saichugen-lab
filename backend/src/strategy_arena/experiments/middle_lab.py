@@ -86,6 +86,13 @@ def reproduce(c,check,progress):
 
 
 class MiddleJobs:
+    kind=KIND
+    estimate=staticmethod(middle_estimate)
+
+    def registration_extras(self,c):return {}
+
+    def result_content(self,v):return {'positions':v['positions'],'reproduction':v['reproduction']}
+
     def __init__(self,store,design,evidence):
         self.store,self.design,self.evidence=store,design,evidence;self.lock=Lock();self.active=None;self.stop=Event();self.owned=set()
         with closing(sqlite3.connect(store.path)) as db,db:
@@ -93,9 +100,9 @@ class MiddleJobs:
             db.execute('CREATE TABLE IF NOT EXISTS middle_evidence_links(series_id TEXT,version INTEGER,job_id TEXT,condition_hash TEXT,note TEXT,PRIMARY KEY(series_id,version,job_id))')
 
     def register(self,c):
-        if middle_estimate(c)['estimated_seconds_range'][1]>c.timeout_seconds:raise ValueError('未校正の上側時間見積もりが時間予算を超えます。規模を縮小してください')
+        if self.estimate(c)['estimated_seconds_range'][1]>c.timeout_seconds:raise ValueError('未校正の上側時間見積もりが時間予算を超えます。規模を縮小してください')
         snapshot={'config':c.model_dump(mode='json'),'sources':runtime_info()['source_sha256'],'rule':RULE_VERSION,'reward':REWARD_VERSION,'metric':'terminal_reward','created_at':now(),
-            'seed_partition':'development','validation_partition':'validation-world-samples','hypothesis':c.hypothesis,'rotations':'all-six','sampler':'uniform-unseen-v1','comparison_family':'探索は全収集局面×(17候補の報酬＋136ペア×3指標)を上限としてBonferroni。検証は固定検証件数×5指標。','statistical_scope':'探索的。独立検証も同一局面条件付き世界の再評価で、実配札の一般化ではない。'}
+            'seed_partition':'development','validation_partition':'validation-world-samples','hypothesis':c.hypothesis,'rotations':'all-six','sampler':'uniform-unseen-v1','comparison_family':'探索は全収集局面×(17候補の報酬＋136ペア×3指標)を上限としてBonferroni。検証は固定検証件数×5指標。','statistical_scope':'探索的。独立検証も同一局面条件付き世界の再評価で、実配札の一般化ではない。',**self.registration_extras(c)}
         seeds=set(range(c.start_offset,c.start_offset+c.deals))|{1000000+c.validation_offset}
         with self.lock,closing(sqlite3.connect(self.store.path)) as db,db:
             db.execute('BEGIN IMMEDIATE')
@@ -105,21 +112,21 @@ class MiddleJobs:
             if any(db.execute('SELECT 1 FROM design_seeds WHERE seed=?',(s,)).fetchone() for s in seeds):raise ValueError('配札は既存Planで予約済み')
             if any(db.execute('SELECT 1 FROM middle_seed_reservations WHERE seed=?',(s,)).fetchone() for s in seeds):raise ValueError('配札・検証系列は予約済み')
             from uuid import uuid4
-            identifier=str(uuid4());value={'experiment_kind':KIND,'status':'Registered','config':c.model_dump(mode='json'),'snapshot':snapshot,'condition_hash':digest(snapshot),'estimate':middle_estimate(c),'created_at':now(),'positions':[],'reproduction':None,'progress':0,'elapsed_seconds':0,'error':None}
+            identifier=str(uuid4());value={'experiment_kind':self.kind,'status':'Registered','config':c.model_dump(mode='json'),'snapshot':snapshot,'condition_hash':digest(snapshot),'estimate':self.estimate(c),'created_at':now(),'positions':[],'reproduction':None,'progress':0,'elapsed_seconds':0,'error':None}
             db.execute('INSERT INTO experiments VALUES (?,?)',(identifier,json.dumps(value)));db.executemany('INSERT INTO middle_seed_reservations VALUES (?,?)',[(s,identifier) for s in seeds])
         return self.get(identifier)
 
     def get(self,identifier):
         v=self.store.get(identifier)
-        if not v or v.get('experiment_kind')!=KIND:raise KeyError(identifier)
+        if not v or v.get('experiment_kind')!=self.kind:raise KeyError(identifier)
         if digest(v['snapshot'])!=v['condition_hash'] or v['config']!=v['snapshot']['config']:v['status']='Invalidated'
-        if v.get('result_hash') and digest({'positions':v['positions'],'reproduction':v['reproduction']})!=v['result_hash']:v['status']='Invalidated'
+        if v.get('result_hash') and digest(self.result_content(v))!=v['result_hash']:v['status']='Invalidated'
         if v['status']=='Running' and identifier not in self.owned:v['status']='Interrupted'
         if v['status']=='Invalidated':
             return {**v,'id':identifier,'positions':[],'reproduction':None,'candidate_count':0,'recommendations':[{'action':'監査・再登録','reason':'登録条件または結果hashが不一致です。改変された結果を評価に使いません。'}]}
         v['stored_result_hash']=v.get('result_hash')
         v['positions']=presentation(v['positions'])
-        if v.get('result_hash'):v['result_hash']=digest({'positions':v['positions'],'reproduction':v['reproduction']})
+        if v.get('result_hash'):v['result_hash']=digest(self.result_content(v))
         v['evidence_schema']='conditional-world-v2'
         v['id']=identifier
         v['candidate_count']=sum(len(p['search']['reversals']) for p in v['positions'])
@@ -135,7 +142,7 @@ class MiddleJobs:
         v['recommendations']=recommendations
         return v
 
-    def history(self):return [self.get(i) for i,p in self.store.iter_experiments() if p.get('experiment_kind')==KIND]
+    def history(self):return [self.get(i) for i,p in self.store.iter_experiments() if p.get('experiment_kind')==self.kind]
 
     def start(self,identifier,expected_hash):
         with self.lock:
@@ -175,7 +182,7 @@ class MiddleJobs:
             except InterruptedError as e:v['status']=str(e)
             except Exception as e:v['status']='Failed';v['error']=f'{type(e).__name__}: {e}'
             finally:
-                v['result_hash']=digest({'positions':v['positions'],'reproduction':v['reproduction']});persist()
+                v['result_hash']=digest(self.result_content(v));persist()
                 with self.lock:self.active=None
         Thread(target=worker,daemon=True,name='middle-control').start();return self.get(identifier)
 
