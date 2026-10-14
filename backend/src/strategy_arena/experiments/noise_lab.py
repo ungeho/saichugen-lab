@@ -1,6 +1,7 @@
 """時間ノイズRと独立判断分岐Dの事前登録。旧実験の意味は変更しない。"""
 from dataclasses import asdict
 from typing import Literal
+from math import lcm
 from pydantic import Field,model_validator
 from .runtime_lab import RuntimeConfig,RuntimeJobs
 from .runtime_analysis import environment
@@ -9,12 +10,13 @@ from .stopping_analysis import select_validation_positions,rule_fingerprint
 from .stratification_analysis import period
 from .noise_analysis import analyze_noise,analyze_divergence,study_summary
 from .evolution import digest
+from .lightweight_analysis import analyze_lightweight,lightweight_summary
 
 def study_estimate(c):
     by={p:max((17-t for t in c.turns if ('final_round' if period(t)=='final_round_start' else period(t))==p),default=0) for p in ('early','middle','before_final_round','final_round')}
     active=[p for p in by if by[p]];ksum=sum(by[active[i%len(active)]] for i in range(c.max_positions))
     reconstruction=ksum*max(c.budgets)*len(c.models)*(1 if c.series=='R' else c.repeats)
-    modes=2 if c.measure_stopping else 1
+    modes=len(c.measurement_modes) if c.revision=='phase37' else 2 if c.measure_stopping else 1
     warm=ksum*sum(c.budgets)*3*c.warmups*modes*len(c.models) if c.series=='R' else 0
     measured=ksum*sum(c.budgets)*3*c.measurement_repeats*modes*len(c.models) if c.series=='R' else 0
     extra=ksum*(c.reference_worlds+c.final_worlds)*len(c.models) if c.series=='D' else 0
@@ -23,12 +25,15 @@ def study_estimate(c):
       'reconstruction_games_upper':reconstruction,'warmup_games_upper':warm,'measurement_games_upper':measured,
       'selection_games_upper':reconstruction+warm+measured,'research_overhead_games_upper':extra,'derived_games_upper':total,
       'simulated_turns_upper':total*(15-min(c.turns)),'collection_games':c.deals*len(c.collectors),
-      'estimated_seconds_range':[total*.0005,total*(.006 if c.series=='R' and c.measure_stopping else .003)+c.deals*len(c.collectors)*.1],
+      'estimated_seconds_range':[total*.0005,total*(.006 if c.series=='R' and (c.measure_stopping or (c.revision=='phase37' and 'Detailed Profile' in c.measurement_modes)) else .003)+c.deals*len(c.collectors)*.1],
       'note':'Rは同一入力の反復とwarmupを実計上、計測モードの摂動は通常群と別集約。Dは最大経路を1回計算し三標本を共有。時間は未校正。'}
 
 class StudyConfig(RuntimeConfig):
     name:str=Field(default='Series R・実行時間ノイズパイロット',min_length=1,max_length=100)
     series:Literal['R','D']='R'
+    revision:Literal['phase36','phase37']='phase36'
+    measurement_modes:list[Literal['Baseline','Lightweight','Detailed Profile']]=Field(default=['Baseline','Lightweight'],min_length=2,max_length=3)
+    repeats:int=Field(default=2,strict=True,ge=1,le=5)
     start_offset:int=Field(default=36000,strict=True,ge=0,le=1999900)
     max_positions:int=Field(default=1,strict=True,ge=1,le=8)
     turns:list[int]=Field(default=[13],min_length=1,max_length=8)
@@ -40,6 +45,13 @@ class StudyConfig(RuntimeConfig):
 
     @model_validator(mode='after')
     def adaptive_valid(self):
+        if self.revision=='phase36' and self.repeats<2:raise ValueError('旧版の選択反復は2以上')
+        if self.revision=='phase37':
+            if len(set(self.measurement_modes))!=len(self.measurement_modes) or not {'Baseline','Lightweight'}<=set(self.measurement_modes):raise ValueError('計測modeの重複禁止、Baseline/Lightweightが必要')
+            if self.measure_stopping:raise ValueError('新計測はmeasurement_modesで指定')
+            if self.series=='R' and self.measurement_repeats%(3*len(self.measurement_modes)):raise ValueError('バランス順序のため測定反復は方式数×mode数の倍数')
+            if self.series=='D' and self.max_positions!=self.deals:raise ValueError('Phase 37は1独立配札1局面を優先')
+            if {1930000,1930001}&set(range(self.start_offset,self.start_offset+self.deals)):raise ValueError('Phase 36既観測配札を再利用しません')
         if self.evaluation_worlds!=64 or self.safety_tolerance!=0:raise ValueError('旧互換設定は固定')
         if self.max_positions<self.deals:raise ValueError('独立配札を優先し1配札1枠以上必要')
         if self.stage=='development_pilot' and (self.partition!='development' or self.start_offset+self.deals>1000000):raise ValueError('開発は開発配札だけ')
@@ -71,15 +83,26 @@ class StudyJobs(RuntimeJobs):
           'denominator':'事前選択した全評価対象局面。分岐例だけを主分析しない。',
           'order':'noise-order-v1、方式×計測モードを専用seedでshuffle。warmupと測定を別に保存。','environment':env,
           'multiplicity_bound':10000,'alpha':.05,'inference':'小標本の記述。任意の統計停止なし。時間CIなし。分岐0は損失リスク0ではない。'}
+        if c.revision=='phase37':
+            plan.update(version='runtime-divergence-phase37-v1',revision=c.revision,measurement_modes=c.measurement_modes,positions_per_deal=1 if c.series=='D' else None,
+                order='balanced-runtime-v1。方式群と群内modeを循環。測定反復数は方式数×mode数の倍数。',
+                lightweight='外側wall/CPUタイマーと16世界ごとのcheckpoint計数のみ。停止関数内の細粒度タイマーなし。',
+                uncertainty='配札単位の発生有無と率。分岐0の見逃し例は同じ発生確率pの独立配札という仮定例だけ。')
+        if c.revision=='phase37' and c.series=='R':
+            plan.update(measurement_plan_version='lightweight-comparison-v1',primary_comparisons=['Lightweight - Baseline'],
+                outcomes=['paired_wall_difference','paired_relative_wall_difference','runtime_distribution'],
+                secondary_comparisons=['Detailed Profile - Baseline','方式間の同一modeの時間差'])
         return {'study_plan':plan,'study_plan_hash':digest(plan)}
 
     def position_results(self,c,records,observations,check,progress):
         for r in select_validation_positions(records,c.max_positions):
-            obs=observations[r['position_hash']];fn=analyze_noise if c.series=='R' else analyze_divergence
+            obs=observations[r['position_hash']];fn=(analyze_lightweight if c.revision=='phase37' else analyze_noise) if c.series=='R' else analyze_divergence
+            result=fn(obs,c,r['position_hash'],check,progress)
+            if c.revision=='phase37':result['revision']='phase37'
             yield {**r,'position_id':r['position_hash'],'observation':asdict(obs),'labels':[r['stratum']['class']],
-              'search':{'reversals':[]},'validation':None,'adaptive':fn(obs,c,r['position_hash'],check,progress)}
+              'search':{'reversals':[]},'validation':None,'adaptive':result}
 
-    summarize_positions=staticmethod(study_summary)
+    summarize_positions=staticmethod(lambda positions:lightweight_summary(positions) if positions and positions[0]['adaptive'].get('revision')=='phase37' else study_summary(positions))
 
     def get(self,identifier):
         v=super().get(identifier);v['measurement_environment']=v['snapshot'].get('study_plan',{}).get('environment')

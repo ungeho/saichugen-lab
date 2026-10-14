@@ -340,3 +340,7 @@ Zigzag（強→弱）とReverse Zigzag（弱→強）を通常対局・観戦・
 ## Phase 36：実行時間ノイズ・判断分岐研究
 
 「戦略研究 → 中間順位・意思決定研究 → Runtime Noise & Decision Divergence Lab」で、Series R（同一入力の時間反復）とSeries D（未使用配札での判断分岐・独立報酬）を別Planとして実行できます。warmupと測定、通常群とprofile群を分離し、64bit seedは文字列で保持します。詳細は[Phase 36](docs/phase36.md)。条件を登録し開始を明示するまで計算は実行しません。
+
+## Phase 37：低負荷計測と判断分岐カバレッジ
+
+既存のRuntime Noise & Decision Divergence Labに、Baseline／Lightweight／Detailed Profileのバランスした対応比較を追加しました。新版は `revision: "phase37"` を指定し、旧実験も引き続き参照できます。Dは1配札1局面を優先し、配札別の分岐発生・見逃し仮定例を表示します。設計と実測は[Phase 37](docs/phase37.md)。
