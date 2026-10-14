@@ -39,6 +39,7 @@ from ..experiments.zigzag_lab import zigzag_template,zigzag_result,zigzag_histor
 from ..experiments.middle_lab import MiddleJobs,MiddleConfig,middle_estimate
 from ..experiments.stratification_lab import StratificationJobs,StratificationConfig,stratification_estimate
 from ..experiments.decision_lab import DecisionJobs,DecisionConfig,decision_estimate
+from ..experiments.reliability_lab import ReliabilityJobs,ReliabilityConfig
 from ..rule_guide import rule_guide, judge
 from contextlib import asynccontextmanager
 
@@ -112,6 +113,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         yield
         jobs.close()
         quality.close()
+        reliability.close()
         decision.close()
         stratification.close()
         middle.close()
@@ -132,6 +134,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     middle=MiddleJobs(store,design,evidence)
     stratification=StratificationJobs(store,design,evidence)
     decision=DecisionJobs(store,design,evidence)
+    reliability=ReliabilityJobs(store,design,evidence)
 
     def evolution_call(action):
         try:return action()
@@ -195,6 +198,24 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     class MiddleLink(BaseModel):
         series_id:str
         version:int=Field(default=1,ge=1)
+
+    @app.post('/api/reliability/estimate')
+    def reliability_preview(request:ReliabilityConfig):return evolution_call(lambda:reliability.estimate(request))
+    @app.post('/api/reliability/jobs',status_code=201)
+    def reliability_register(request:ReliabilityConfig):return evolution_call(lambda:reliability.register(request))
+    @app.get('/api/reliability/jobs')
+    def reliability_history():return reliability.history()
+    @app.get('/api/reliability/jobs/{identifier}')
+    @app.get('/api/reliability/jobs/{identifier}/export')
+    def reliability_read(identifier:str):return evolution_call(lambda:reliability.get(identifier))
+    @app.post('/api/reliability/jobs/{identifier}/start',status_code=202)
+    def reliability_start(identifier:str,request:MiddleStart):return evolution_call(lambda:reliability.start(identifier,request.condition_hash))
+    @app.post('/api/reliability/jobs/{identifier}/cancel')
+    def reliability_cancel(identifier:str):return evolution_call(lambda:reliability.cancel(identifier))
+    @app.post('/api/reliability/jobs/{identifier}/design-draft',status_code=201)
+    def reliability_draft(identifier:str):return evolution_call(lambda:reliability.design_draft(identifier))
+    @app.post('/api/reliability/jobs/{identifier}/evidence',status_code=201)
+    def reliability_link(identifier:str,request:MiddleLink):return evolution_call(lambda:reliability.link_evidence(identifier,request.series_id,request.version))
 
     @app.post('/api/decision/estimate')
     def decision_preview(request:DecisionConfig):return decision_estimate(request)

@@ -1,0 +1,54 @@
+{
+  "name": "意思決定信頼性・小規模診断",
+  "deals": 1,
+  "start_offset": 13000,
+  "turns": [
+    11
+  ],
+  "trials": 8,
+  "validation_trials": 32,
+  "validation_offset": 13000,
+  "max_validate": 0,
+  "continuation": [
+    "Random",
+    "Random",
+    "Random"
+  ],
+  "policy_seed": 42,
+  "reproduce": false,
+  "reproduce_rollouts": 2,
+  "timeout_seconds": 120,
+  "hypothesis": "選択予算・乱数・継続モデル依存を別々に記述し、選択誤差・モデル不一致・小さな価値差を競合する未確定の説明として調べる。",
+  "collectors": [
+    "Random",
+    "Heuristic",
+    "ScoreAware",
+    "Zigzag",
+    "Reverse Zigzag"
+  ],
+  "definition": {
+    "version": "strict-middle-v1",
+    "small": 5,
+    "large": 10,
+    "balance_tolerance": 0
+  },
+  "max_positions": 2,
+  "controls": 0,
+  "budgets": [
+    16,
+    32,
+    64,
+    128,
+    256
+  ],
+  "repeats": 2,
+  "models": [
+    "Random",
+    "Heuristic",
+    "ScoreAware"
+  ],
+  "evaluation_worlds": 64,
+  "safety_tolerance": 0.0,
+  "diagnostic_source_id": null,
+  "historical_limit": 1
+}

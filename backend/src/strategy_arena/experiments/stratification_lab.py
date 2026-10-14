@@ -79,6 +79,7 @@ class StratificationJobs(MiddleJobs):
     kind='middle_stratification_v1'
     estimate=staticmethod(stratification_estimate)
     config_type=StratificationConfig
+    progress_interval=0
 
     def registration_extras(self,c):
         return {'rotations':'all-three-observers-per-collector-trajectory','strata':c.definition.model_dump(),'collectors':c.collectors,'analysis_selection':'均衡・上側接近・下側接近を巡回、配札・収集元の分析数を均す。時点優先12,11,13,14,9,6,3。結果を見て選ばない。',
@@ -112,6 +113,8 @@ class StratificationJobs(MiddleJobs):
 
     def summarize_positions(self,positions):return cluster_summary(positions)
 
+    def collect_positions(self,c,check,progress,snapshot):return collect(c,check,progress)
+
     def start(self,identifier,expected_hash):
         with self.lock:
             if self.active:raise RuntimeError('層別実験は1件ずつ')
@@ -125,9 +128,13 @@ class StratificationJobs(MiddleJobs):
                 if self.stop.is_set():raise InterruptedError('Cancelled')
                 if monotonic()-started>c.timeout_seconds:raise InterruptedError('TimedOut')
             def persist():v['elapsed_seconds']=monotonic()-started;self.store.update(identifier,v)
-            def progress():v['progress']+=1;persist()
+            last_report=[started]
+            def progress():
+                v['progress']+=1
+                if monotonic()-last_report[0]>=self.progress_interval:
+                    persist();last_report[0]=monotonic()
             try:
-                records,observations,summary=collect(c,check,progress);v['inventory']=records;v['collection_summary']=summary;persist()
+                records,observations,summary=self.collect_positions(c,check,progress,v['snapshot']);v['inventory']=records;v['collection_summary']=summary;persist()
                 for item in self.position_results(c,records,observations,check,progress):
                     v['positions'].append(item);persist()
                 v['cluster_summary']=self.summarize_positions(v['positions']);v['status']='Completed'
