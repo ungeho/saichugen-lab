@@ -58,6 +58,8 @@ class BoundaryConfig(RuntimeConfig):
     order_seed:int=Field(default=43001,strict=True,ge=0,le=999999)
     hypothesis:str=Field(default='判断境界・得点と時点の交絡・収集保存費用を分けた探索的分析。因果効果や優位性の検証ではない。',min_length=1,max_length=2000)
 
+    def slots_per_period(self):return min(4,self.max_positions)
+
     @model_validator(mode='after')
     def adaptive_valid(self):
         if self.models!=['Random','Heuristic','ScoreAware']:raise ValueError('3継続モデル固定')
@@ -71,7 +73,7 @@ class BoundaryConfig(RuntimeConfig):
             labels=[normalized(period(t)) for t in self.turns]
             if len(set(labels))!=len(labels) or any(p not in labels for p in self.campaign_periods):raise ValueError('各時点に1手番を事前指定')
             for label in set(self.campaign_periods):
-                if self.campaign_periods.count(label)!=min(4,self.max_positions) and len(labels)>1:raise ValueError('複数時点では各時点4得点枠を見積もる')
+                if self.campaign_periods.count(label)!=self.slots_per_period() and len(labels)>1:raise ValueError('時点あたりの事前評価枠を見積もる')
             if self.boundary_series=='M' and (self.deals!=1 or self.max_positions!=1 or self.turns!=[14]):raise ValueError('Mは1配札・最終1局面の計測のみ')
             if self.stage=='development_pilot' and (self.partition!='development' or self.start_offset+self.deals>1000000):raise ValueError('開発は開発seedだけ')
             if self.stage=='independent_validation' and (self.partition!='validation' or not 1000000<=self.start_offset<self.start_offset+self.deals<=2000000 or not self.prior_deal_hashes or not self.prior_inventory_note or self.storage_history_rows is None or self.expected_payload_bytes is None):raise ValueError('未使用配札・照合範囲・保存条件を事前固定')

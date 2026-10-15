@@ -368,3 +368,7 @@ Zigzag（強→弱）とReverse Zigzag（弱→強）を通常対局・観戦・
 ## Phase 43：判断境界・交差収集・収集保存コスト
 
 既存Runtime Noise & Decision Divergence Labに、Series B（保存Evidenceの境界分析）、C（時点×得点状態の交差収集）、M（収集・保存の反復計測）を追加しました。Boundary Explorerで16/32/64/128世界の候補差を確認し、4×4表で収集欠測と評価対象外を区別できます。各系列を別Planとして登録し、条件・凍結予測・予算を確認してから開始してください。結果は探索的であり、収集成功率は自然発生確率ではありません。設計・実測・旧カード表記の不整合は[Phase 43](docs/phase43.md)を参照してください。Windowsのsetup.ps1/dev.ps1は引き続き利用できます。
+
+## Phase 44：対応判断境界と隔離保存効率
+
+既存Runtime Noise & Decision Divergence Labに、Series D（配札内の条件を揃えた判断境界）とSeries E（隔離WAL保存ベンチマーク）を追加しました。Dはマッチ成立・不成立・未評価を分け、16世界Gapとその後の先頭変更を確認できます。Eは同じ論理Evidenceを保存頻度・payload・batchで比較し、最後のcommitと未commit損失を検証します。本番の保存方式は変更しません。条件と予算を事前登録してから開始してください。設計・実測・制限は[Phase 44](docs/phase44.md)。Windowsの既存setup.ps1/dev.ps1はそのまま使えます。

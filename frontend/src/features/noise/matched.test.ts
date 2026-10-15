@@ -1,0 +1,4 @@
+import {it,expect} from 'vitest';
+import {matchedInitial,storageInitial} from './MatchedResults';
+it('Dは事前割当・小規模開発・凍結モデル明示から開始する',()=>{expect(matchedInitial.matched_series).toBe('D');expect(matchedInitial.matched_sources).toEqual(['Random']);expect(matchedInitial.matched_scores).toEqual(['highest','lowest']);expect(matchedInitial.calibration).toBeNull();expect(matchedInitial.stage).toBe('development_pilot');});
+it('Eは合成seedを文字列で保持し27条件・warmup分離・有限上限を持つ',()=>{expect(storageInitial.matched_series).toBe('E');expect(typeof storageInitial.storage.payload_seed).toBe('string');expect(storageInitial.storage.sizes.length*storageInitial.storage.frequencies.length*storageInitial.storage.batches.length).toBe(27);expect(storageInitial.storage.warmups).toBe(1);expect(storageInitial.storage.total_limit_bytes).toBe(67108864);});
