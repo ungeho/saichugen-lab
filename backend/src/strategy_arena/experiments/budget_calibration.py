@@ -24,7 +24,7 @@ def stage_span(stage,**meta):
       'derived_games':None,'simulated_turns':None,'items':1,'completed':False}
     ledger['rows'].append(row);ledger['stack'].append(row)
     g,t=counters();wall=perf_counter();cpu=process_time();row['interval_start']=wall
-    try:yield;row['completed']=True
+    try:yield row;row['completed']=True
     finally:
         row['interval_end']=perf_counter();row['wall_seconds']=row['interval_end']-wall;row['cpu_seconds']=process_time()-cpu
         children=[r for r in ledger['rows'] if r['parent']==row['id'] and r['wall_seconds'] is not None]
@@ -38,7 +38,9 @@ class TimedStore:
     def __init__(self,store):self.original=store
     def __getattr__(self,key):return getattr(self.original,key)
     def update(self,*args,**kwargs):
-        with stage_span('sqlite_json_write'):return self.original.update(*args,**kwargs)
+        with stage_span('sqlite_json_write') as row:
+            if row is not None:kwargs['on_write']=row.update
+            return self.original.update(*args,**kwargs)
 
 def breakdown(rows,total):
     done=[r for r in rows if r.get('exclusive_wall_seconds') is not None]
@@ -110,6 +112,9 @@ def fit_calibration(jobs):
 def forecast(c,estimate):
     if c.calibration is None:return {'rating':'データ不足で判断困難','predicted_seconds':None,'conservative_seconds':None,'guarantee':False}
     model=c.calibration
+    if model.version=='coverage-turn-rate-v2':
+        from .calibration_coverage import forecast_coverage
+        return forecast_coverage(c,estimate)
     from .stratification_analysis import period
     slots={p:max((17-t for t in c.turns if ('final_round' if period(t)=='final_round_start' else period(t))==p),default=0) for p in ('early','middle','before_final_round','final_round')}
     times={p:max((15-t for t in c.turns if ('final_round' if period(t)=='final_round_start' else period(t))==p),default=0) for p in slots}

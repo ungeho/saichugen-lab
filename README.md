@@ -352,3 +352,7 @@ Zigzag（強→弱）とReverse Zigzag（弱→強）を通常対局・観戦・
 ## Phase 39：計算予算の校正と完了信頼性
 
 既存Labの「計算予算校正の新規条件」で粗粒度の段階別wall/CPU時間と残差を記録します。保存実験IDから校正モデルを生成し、Plan JSONの `calibration` へ設定すると平均・保守予測を固定できます。独立検証は未使用配札で別Planにし、完了・部分・未開始を区別します。予測は完了保証ではありません。Phase 38のTimedOutを変更・継ぎ足しません。設計と実測は[Phase 39](docs/phase39.md)を参照してください。
+
+## Phase 40：計算コスト予測の適用範囲
+
+既存Runtime Noise & Decision Divergence Labの「校正範囲検証の新規条件」と「Calibration Coverage」から、記録の品質分類、合成DBの保存負荷測定、範囲付きv2予測モデルを利用できます。独立検証前に係数・Hash・保存条件を固定し、配札単位の探索時間とPlan全体時間を区別します。詳細は[Phase 40](docs/phase40.md)を参照してください。

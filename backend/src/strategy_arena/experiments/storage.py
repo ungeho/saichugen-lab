@@ -22,12 +22,14 @@ class ExperimentStore:
             row = connection.execute("SELECT payload FROM experiments WHERE id = ?", (identifier,)).fetchone()
         return json.loads(row[0]) if row else None
 
-    def update(self, identifier: str, payload: dict) -> None:
+    def update(self, identifier: str, payload: dict, *, on_write=None) -> None:
         """新規ジョブ自身の保存レコードだけを更新する。旧実験は移行しない。"""
+        serialized=json.dumps(payload)
         with sqlite3.connect(self.path) as connection:
-            changed = connection.execute("UPDATE experiments SET payload=? WHERE id=?", (json.dumps(payload), identifier))
+            changed = connection.execute("UPDATE experiments SET payload=? WHERE id=?", (serialized, identifier))
             if changed.rowcount != 1:
                 raise KeyError(identifier)
+        if on_write is not None:on_write({'written_bytes':len(serialized),'transactions':1}) # ensure_ascii=TrueなのでUTF-8論理バイト数と一致。
 
     def iter_experiments(self):
         # 呼び出し側が履歴を集計・再読込している間、読取ロックを保持しない。
