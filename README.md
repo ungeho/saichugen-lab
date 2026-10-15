@@ -360,3 +360,7 @@ Zigzag（強→弱）とReverse Zigzag（弱→強）を通常対局・観戦・
 ## Phase 41：適応探索の独立配札評価Campaign
 
 既存Runtime Noise & Decision Divergence LabにCampaign結果を追加しました。Fixedに対する対応wall時間差と独立終局報酬差を配札等重みで表示し、分岐配札・分岐局面・分岐判断を区別します。Phase40の凍結予測モデルを指定し、時点割当と採用基準を実験前に固定してください。使い方・実測・制限は[Phase 41](docs/phase41.md)を参照してください。
+
+## Phase 42：自然分岐頻度と得点層別探索
+
+既存Runtime Noise & Decision Divergence Labに「自然抽出N」「得点層別S」の新規条件を追加しました。Nは事前指定した配札・収集元・席・時点を評価し、Sは別配札で得点層を選別します。両者の結果は混ぜません。Phase40の凍結モデルを設定し、両Planを先に登録してからN→Sの順に開始してください。欠測は欠測として表示し、分岐0件でも予定配札で終了します。詳細は[Phase 42](docs/phase42.md)。既存Windowsセットアップ・起動手順はそのまま利用できます。
