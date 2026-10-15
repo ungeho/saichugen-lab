@@ -4,6 +4,7 @@ from threading import Thread,Event
 from time import monotonic
 from random import Random
 from collections import Counter
+from contextlib import nullcontext
 from typing import Literal
 from pydantic import Field,model_validator
 from .middle_lab import MiddleJobs,MiddleConfig
@@ -50,23 +51,27 @@ def stratification_estimate(c):
         'note':'同一配札の5収集元・3席・複数時点は独立配札数を増やさない。上側時間は未校正。'}
 
 
-def collect(c,check=lambda:None,progress=lambda:None):
+def collect(c,check=lambda:None,progress=lambda:None,span=None):
+    span=span or (lambda *args,**kwargs:nullcontext())
     records={};observations={};sources=runtime_info()['source_sha256'];seen=0
     for seed in range(c.start_offset,c.start_offset+c.deals):
         dh=deal_identity(seed,sources)
         for source in c.collectors:
-            game=Game(seed);policies=[create_strategy(source) for _ in range(3)];rngs=[Random(derived_seed(c.policy_seed,f'collection-v2:{source}:{p}')) for p in range(3)]
+            with span('trajectory_generation'):
+                game=Game(seed);policies=[create_strategy(source) for _ in range(3)];rngs=[Random(derived_seed(c.policy_seed,f'collection-v2:{source}:{p}')) for p in range(3)]
             for turn in range(15):
                 check()
                 if turn in c.turns:
                     for p in range(3):
-                        obs=game.observe(p);oh=digest(asdict(obs));ph=digest({'observation_hash':oh,'rule':RULE_VERSION});seen+=1
-                        origin={'deal_id':str(seed),'deal_hash':dh,'source':source,'player':p,'turn':turn}
-                        if ph in records:records[ph]['origins'].append(origin);continue
-                        records[ph]={'position_hash':ph,'observation_hash':oh,**origin,'origins':[origin],'stratum':stratify(obs.game_scores,p,c.definition),'period':period(turn),
-                            'round':turn//3+1,'game_scores':list(obs.game_scores),'seed_partition':'development','reachable':'engine-legal-history-v1'}
-                        observations[ph]=obs
-                game.play(tuple(policies[p].choose(game.observe(p),rngs[p]).card for p in range(3)))
+                        with span('position_extraction'):
+                            obs=game.observe(p);oh=digest(asdict(obs));ph=digest({'observation_hash':oh,'rule':RULE_VERSION});seen+=1
+                            origin={'deal_id':str(seed),'deal_hash':dh,'source':source,'player':p,'turn':turn}
+                            if ph in records:records[ph]['origins'].append(origin);continue
+                            with span('score_classification'):stratum=stratify(obs.game_scores,p,c.definition)
+                            records[ph]={'position_hash':ph,'observation_hash':oh,**origin,'origins':[origin],'stratum':stratum,'period':period(turn),
+                                'round':turn//3+1,'game_scores':list(obs.game_scores),'seed_partition':'development','reachable':'engine-legal-history-v1'}
+                            observations[ph]=obs
+                with span('trajectory_generation'):game.play(tuple(policies[p].choose(game.observe(p),rngs[p]).card for p in range(3)))
             progress()
     rows=list(records.values())
     return rows,observations,{'scanned':seen,'unique_positions':len(rows),'duplicates':seen-len(rows),'strict_middle':sum(r['stratum']['strict_middle'] for r in rows),

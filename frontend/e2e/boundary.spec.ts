@@ -1,0 +1,16 @@
+import {test,expect} from '@playwright/test';
+import {readFileSync} from 'node:fs';
+test('実APIでB/C/M・交差行列・費用内訳・直接URL・停止を分離する',async({page,request})=>{
+ const calibration=JSON.parse(readFileSync('../configs/calibration/phase40-frozen.json','utf8'));const start=160000+Date.now()%10000;
+ const common={calibration,start_offset:start,turns:[14],deals:1,max_positions:1,campaign_periods:['final_round'],models:['Random','Heuristic','ScoreAware'],budgets:[128],repeats:1,warmups:0};
+ const prior=await request.post('/api/runtime-divergence/jobs',{data:{...common,revision:'phase42',series:'D',collection_series:'N'}});
+ if(prior.status()===422&&(await prior.text()).includes('校正環境'))test.skip(true,'Phase40凍結モデルの環境が異なる');expect(prior.ok()).toBeTruthy();const old=await prior.json();await request.post('/api/runtime-divergence/jobs/'+old.id+'/start',{data:{condition_hash:old.condition_hash}});await expect.poll(async()=>(await(await request.get('/api/runtime-divergence/jobs/'+old.id)).json()).status,{timeout:30000}).toBe('Completed');
+ const jobs=[];for(const series of ['B','C','M']){
+  const response=await request.post('/api/runtime-divergence/jobs',{data:{...common,revision:'phase43',boundary_series:series,start_offset:start+10000*(jobs.length+1),positions_per_deal:1,source_ids:series==='B'?[old.id]:[]}});expect(response.ok()).toBeTruthy();jobs.push(await response.json());
+ }
+ expect(new Set(jobs.map(v=>v.snapshot.study_plan_hash)).size).toBe(3);
+ for(const job of jobs){await request.post('/api/runtime-divergence/jobs/'+job.id+'/start',{data:{condition_hash:job.condition_hash}});await expect.poll(async()=>(await(await request.get('/api/runtime-divergence/jobs/'+job.id)).json()).status,{timeout:30000}).toBe('Completed');const result=await(await request.get('/api/runtime-divergence/jobs/'+job.id+'/export')).json();expect(result.boundary_evidence.complete).toBeTruthy();await page.goto('/research/runtime-divergence?experiment='+job.id);const panel=page.getByRole('region',{name:'Decision Boundaryの結果'});await expect(panel).toContainText('Series '+job.config.boundary_series);await expect(panel).toContainText('全処理を確認済み');await expect(panel).toContainText(job.snapshot.study_plan_hash);await expect(panel).toContainText('Boundary Explorer');await expect(panel).toContainText('Measurement Breakdown');if(job.config.boundary_series==='C'){await expect(panel).toContainText('Crossed Coverage Matrix');await expect(panel).toContainText('対象外');}await page.reload();await expect(panel).toContainText(job.snapshot.study_plan_hash);}
+ const cancelled=await(await request.post('/api/runtime-divergence/jobs',{data:{...common,revision:'phase43',boundary_series:'C',start_offset:start+50000,positions_per_deal:1}})).json();const stop=await(await request.post('/api/runtime-divergence/jobs/'+cancelled.id+'/cancel',{data:{}})).json();expect(stop.status).toBe('Cancelled');expect(stop.boundary_evidence.complete).toBeFalsy();
+ await page.getByLabel('適応の保存履歴',{exact:true}).selectOption(jobs[0].id);await expect(page.getByRole('region',{name:'Decision Boundaryの結果'})).toContainText('Series B');
+ await page.setViewportSize({width:390,height:844});await expect.poll(()=>page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth)).toBeTruthy();
+});
