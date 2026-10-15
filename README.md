@@ -372,3 +372,9 @@ Zigzag（強→弱）とReverse Zigzag（弱→強）を通常対局・観戦・
 ## Phase 44：対応判断境界と隔離保存効率
 
 既存Runtime Noise & Decision Divergence Labに、Series D（配札内の条件を揃えた判断境界）とSeries E（隔離WAL保存ベンチマーク）を追加しました。Dはマッチ成立・不成立・未評価を分け、16世界Gapとその後の先頭変更を確認できます。Eは同じ論理Evidenceを保存頻度・payload・batchで比較し、最後のcommitと未commit損失を検証します。本番の保存方式は変更しません。条件と予算を事前登録してから開始してください。設計・実測・制限は[Phase 44](docs/phase44.md)。Windowsの既存setup.ps1/dev.ps1はそのまま使えます。
+
+## Phase45：最終戦略大会と研究終了
+
+既存Runtime Noise & Decision Divergence Labの「Final Strategy Tournament」から、登録済み戦略の3人実戦を事前登録・実行・停止・JSON保存できます。配札単位の平均終局報酬、観測順位、対応差と区間、計算コスト、研究終了判定を表示します。通常対戦に存在しないFixed128は除外し、Random・Heuristic・ScoreAware・hybrid_combined既定設定を比較します。実験条件・使用不能理由・最終結果は [Phase45](docs/phase45.md) を参照してください。結果を見て追加配札を行わず、この大会で研究を一区切りにします。Windowsのsetup.ps1/dev.ps1手順は従来どおりです。
+
+最終大会は12独立配札・768試合を291.078秒で完了しました。観測上の推奨はhybrid_combined（平均終局報酬+0.4323、Random差+0.6198）ですが、事前固定した保守基準では優位性未確認（C）として研究を一区切りにしています。

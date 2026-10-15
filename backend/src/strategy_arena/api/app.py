@@ -42,6 +42,7 @@ from ..experiments.decision_lab import DecisionJobs,DecisionConfig,decision_esti
 from ..experiments.noise_lab import StudyJobs as NoiseJobs,StudyConfig as NoiseConfig
 from ..experiments.boundary_lab import BoundaryJobs,BoundaryConfig
 from ..experiments.matched_lab import MatchedJobs,MatchedConfig
+from ..experiments.tournament import TournamentJobs,TournamentConfig
 from ..experiments.runtime_lab import RuntimeJobs,RuntimeConfig
 from ..experiments.horizon_lab import HorizonJobs,HorizonConfig
 from ..experiments.stopping_lab import StoppingJobs,StoppingConfig
@@ -123,6 +124,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         noise_lab.close()
         boundary_lab.close()
         matched_lab.close()
+        tournament_lab.close()
         runtime_lab.close()
         horizon.close()
         stopping_lab.close()
@@ -156,9 +158,11 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     noise_lab=NoiseJobs(store,design,evidence)
     boundary_lab=BoundaryJobs(store,design,evidence)
     matched_lab=MatchedJobs(store,design,evidence)
+    tournament_lab=TournamentJobs(store,design,evidence)
 
     def noise_owner(identifier):
         raw=store.get(identifier)
+        if raw and raw.get('experiment_kind')==tournament_lab.kind:return tournament_lab
         if raw and raw.get('experiment_kind')==matched_lab.kind:return matched_lab
         return boundary_lab if raw and raw.get('experiment_kind')==boundary_lab.kind else noise_lab
 
@@ -226,7 +230,7 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
         version:int=Field(default=1,ge=1)
 
     @app.post('/api/runtime-divergence/estimate')
-    def noise_preview(request:NoiseConfig|BoundaryConfig|MatchedConfig):return evolution_call(lambda:(matched_lab if isinstance(request,MatchedConfig) else boundary_lab if isinstance(request,BoundaryConfig) else noise_lab).estimate(request))
+    def noise_preview(request:NoiseConfig|BoundaryConfig|MatchedConfig|TournamentConfig):return evolution_call(lambda:(tournament_lab if isinstance(request,TournamentConfig) else matched_lab if isinstance(request,MatchedConfig) else boundary_lab if isinstance(request,BoundaryConfig) else noise_lab).estimate(request))
     @app.post('/api/runtime-divergence/calibration')
     def noise_calibrate(request:dict):return evolution_call(lambda:noise_lab.calibrate(request.get('source_ids'),request.get('benchmark_id')))
     @app.post('/api/runtime-divergence/calibration-inventory')
@@ -236,14 +240,14 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
     @app.get('/api/runtime-divergence/storage-benchmark/{identifier}')
     def noise_storage_result(identifier:str):return evolution_call(lambda:noise_lab.storage_result(identifier))
     @app.post('/api/runtime-divergence/jobs',status_code=201)
-    def noise_register(request:NoiseConfig|BoundaryConfig|MatchedConfig):return evolution_call(lambda:(matched_lab if isinstance(request,MatchedConfig) else boundary_lab if isinstance(request,BoundaryConfig) else noise_lab).register(request))
+    def noise_register(request:NoiseConfig|BoundaryConfig|MatchedConfig|TournamentConfig):return evolution_call(lambda:(tournament_lab if isinstance(request,TournamentConfig) else matched_lab if isinstance(request,MatchedConfig) else boundary_lab if isinstance(request,BoundaryConfig) else noise_lab).register(request))
     @app.get('/api/runtime-divergence/jobs')
     def noise_history(summary:bool=False):
         if summary:
             return [{'id':i,'status':v['status'],'name':v.get('config',{}).get('name'),
                 'status_scope':'保存状態。完全性は詳細取得時に検証'} for i,v in store.iter_experiments()
-                if v.get('experiment_kind') in (noise_lab.kind,boundary_lab.kind,matched_lab.kind)]
-        return noise_lab.history()+boundary_lab.history()+matched_lab.history()
+                if v.get('experiment_kind') in (noise_lab.kind,boundary_lab.kind,matched_lab.kind,tournament_lab.kind)]
+        return noise_lab.history()+boundary_lab.history()+matched_lab.history()+tournament_lab.history()
     @app.get('/api/runtime-divergence/jobs/{identifier}')
     @app.get('/api/runtime-divergence/jobs/{identifier}/export')
     def noise_read(identifier:str):return evolution_call(lambda:noise_owner(identifier).get(identifier))

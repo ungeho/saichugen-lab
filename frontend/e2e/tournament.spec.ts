@@ -1,0 +1,21 @@
+import {test,expect} from '@playwright/test';
+test('Final Tournamentの実API・配札単位順位・seed・直接URL・停止',async({page,request})=>{
+ test.setTimeout(90000);
+ await page.goto('/research/runtime-divergence');await page.getByRole('button',{name:'Final Strategy Tournament',exact:true}).click();
+ const box=page.getByRole('textbox',{name:'Adaptive Plan JSON'});const config=JSON.parse(await box.inputValue());config.deal_seeds=[String(45080+Number(process.env.TOURNAMENT_TEST_OFFSET??0))];config.composition_mode='symmetric_reduced';config.timeout_seconds=90;
+ await box.fill(JSON.stringify(config));await page.getByRole('button',{name:'適応の条件を登録',exact:true}).click();await expect(page.getByRole('status').first()).toContainText('Registered');
+ await expect(page.getByLabel('Final Tournament Summary')).toContainText('未完了の主要ランキング');
+ const id=new URL(page.url()).searchParams.get('experiment')!;const before=await(await request.get('/api/runtime-divergence/jobs/'+id)).json();expect(before.config.policy_seed).toBe('18446744073709551045');
+ await page.getByRole('button',{name:'登録Hashで適応実験を開始',exact:true}).click();
+ await expect(page.getByLabel('Final Tournament Summary')).toContainText('Completed',{timeout:60000});
+ await expect(page.getByLabel('Final Tournament Summary')).toContainText('観測順位');
+ const result=await(await request.get('/api/runtime-divergence/jobs/'+id+'/export')).json();expect(result.tournament_evidence.complete_deals).toBe(1);expect(result.tournament_evidence.recorded_games).toBe(28);expect(result.snapshot.study_plan_hash).toBe(before.snapshot.study_plan_hash);
+ expect(result.tournament_evidence.ranking).toHaveLength(4);
+ await expect(page.getByRole('heading',{name:'研究管理',exact:true})).toHaveCount(0);
+ const legacy=await request.post('/api/runtime-divergence/jobs',{data:{name:'tournament-switch-source',start_offset:46000+Number(process.env.TOURNAMENT_TEST_OFFSET??0),turns:[13],max_positions:1,models:['Random'],measurement_repeats:2,warmups:1,measure_stopping:true}});expect(legacy.status()).toBe(201);const earlier=await legacy.json();
+ await page.reload();await expect(page.getByLabel('Final Tournament Summary')).toContainText('Completed');
+ await page.getByRole('combobox',{name:'適応の保存履歴'}).selectOption(earlier.id);await expect(page.getByLabel('時間ノイズと判断分岐の結果')).toBeVisible();await page.getByRole('combobox',{name:'適応の保存履歴'}).selectOption(id);await expect(page.getByLabel('Final Tournament Summary')).toContainText('Completed');
+ await page.reload();await expect(page.getByLabel('Final Tournament Summary')).toContainText('Completed');
+ await page.setViewportSize({width:390,height:844});await expect(page.getByLabel('Final Tournament Summary')).toBeVisible();
+ config.deal_seeds=[String(45081+Number(process.env.TOURNAMENT_TEST_OFFSET??0))];const registered=await request.post('/api/runtime-divergence/jobs',{data:config});expect(registered.status()).toBe(201);const other=await registered.json();const stopped=await(await request.post('/api/runtime-divergence/jobs/'+other.id+'/cancel',{data:{}})).json();expect(stopped.status).toBe('Cancelled');expect(stopped.tournament_evidence.ranking).toBeNull();
+});
