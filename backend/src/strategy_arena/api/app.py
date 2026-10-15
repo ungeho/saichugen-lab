@@ -216,6 +216,8 @@ def create_app(database: str | Path = "experiments.sqlite3") -> FastAPI:
 
     @app.post('/api/runtime-divergence/estimate')
     def noise_preview(request:NoiseConfig):return evolution_call(lambda:noise_lab.estimate(request))
+    @app.post('/api/runtime-divergence/calibration')
+    def noise_calibrate(request:dict):return evolution_call(lambda:noise_lab.calibrate(request.get('source_ids')))
     @app.post('/api/runtime-divergence/jobs',status_code=201)
     def noise_register(request:NoiseConfig):return evolution_call(lambda:noise_lab.register(request))
     @app.get('/api/runtime-divergence/jobs')

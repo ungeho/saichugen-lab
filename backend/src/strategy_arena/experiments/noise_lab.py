@@ -12,21 +12,26 @@ from .noise_analysis import analyze_noise,analyze_divergence,study_summary
 from .evolution import digest
 from .lightweight_analysis import analyze_lightweight,lightweight_summary
 from .multideal_analysis import analyze_multideal,multideal_summary
+from .budget_calibration import CalibrationModel,active_ledger,position_context,stage_span,TimedStore,breakdown,forecast,deal_progress,completion_audit,fit_calibration
 
 def study_estimate(c):
     by={p:max((17-t for t in c.turns if ('final_round' if period(t)=='final_round_start' else period(t))==p),default=0) for p in ('early','middle','before_final_round','final_round')}
     active=[p for p in by if by[p]];ksum=sum(by[active[i%len(active)]] for i in range(c.max_positions))
-    if c.revision=='phase38':
+    if c.revision in ('phase38','phase39'):
         models=len(c.models);path=ksum*128*models;direct=path*3
         warm=(17-min(c.turns))*16*3*models*c.warmups;extra=ksum*(c.reference_worlds+c.final_worlds)*models
         total=path+direct+warm+extra
-        return {'series':'D','independent_fresh_deals':c.deals,'positions_upper':c.max_positions,
+        result={'series':'D','independent_fresh_deals':c.deals,'positions_upper':c.max_positions,
           'reconstruction_games_upper':path,'measurement_games_upper':direct,'warmup_games_upper':warm,
           'selection_games_upper':path+direct+warm,'research_overhead_games_upper':extra,'derived_games_upper':total,
           'reference_games_upper':ksum*c.reference_worlds*models,'final_games_upper':ksum*c.final_worlds*models,
           'simulated_turns_upper':total*(15-min(c.turns)),'collection_games':c.deals*len(c.collectors),
           'model_games_upper':{m:total//models for m in c.models},'estimated_seconds_range':[total*.0005,total*.003+c.deals*len(c.collectors)*.1],
           'note':'保守的上限。最大経路＋全方式直接実測＋最初の局面だけ16世界warmup＋独立参照/最終。秒は未校正で環境依存。SQLite保存・収集を含む全体250秒で技術中止。'}
+        if c.revision=='phase39':
+            result['completion_forecast']=forecast(c,result)
+            result['note']='従来の未校正秒数レンジと校正後completion_forecastを区別。実行上限は設定timeout_seconds。粗粒度の処理区間を計測し、未計測は残差。'
+        return result
     reconstruction=ksum*max(c.budgets)*len(c.models)*(1 if c.series=='R' else c.repeats)
     modes=len(c.measurement_modes) if c.revision=='phase37' else 2 if c.measure_stopping else 1
     warm=ksum*sum(c.budgets)*3*c.warmups*modes*len(c.models) if c.series=='R' else 0
@@ -43,7 +48,10 @@ def study_estimate(c):
 class StudyConfig(RuntimeConfig):
     name:str=Field(default='Series R・実行時間ノイズパイロット',min_length=1,max_length=100)
     series:Literal['R','D']='R'
-    revision:Literal['phase36','phase37','phase38']='phase36'
+    revision:Literal['phase36','phase37','phase38','phase39']='phase36'
+    calibration:CalibrationModel|None=None
+    measure_stages:bool=Field(default=True,strict=True)
+    allow_risky_forecast:bool=Field(default=False,strict=True)
     deals:int=Field(default=1,strict=True,ge=1,le=8)
     timeout_seconds:int=Field(default=120,strict=True,ge=1,le=250)
     prior_deal_hashes:list[str]=Field(default=[],max_length=20000)
@@ -61,8 +69,10 @@ class StudyConfig(RuntimeConfig):
 
     @model_validator(mode='after')
     def adaptive_valid(self):
-        if self.revision!='phase38' and (self.deals>4 or self.timeout_seconds>120 or self.prior_deal_hashes or self.prior_inventory_note):raise ValueError('旧版の規模・予算は維持')
-        if self.revision=='phase38':
+        if self.revision not in ('phase38','phase39') and (self.deals>4 or self.timeout_seconds>120 or self.prior_deal_hashes or self.prior_inventory_note):raise ValueError('旧版の規模・予算は維持')
+        if self.revision!='phase39' and (self.calibration is not None or self.allow_risky_forecast):raise ValueError('校正はPhase 39のみ')
+        if self.revision=='phase39' and self.stage=='independent_validation' and self.calibration is None:raise ValueError('独立検証は校正モデルを事前固定してください')
+        if self.revision in ('phase38','phase39'):
             if self.series!='D' or self.budgets!=[128] or self.repeats!=1 or self.max_positions!=self.deals:raise ValueError('Phase 38はD・128世界・1配札1局面・選択1反復を固定')
             if self.models!=['Random','Heuristic','ScoreAware'] or self.measure_stopping:raise ValueError('3モデル固定・詳細profile禁止')
             if self.measurement_modes!=['Baseline','Lightweight']:raise ValueError('直接計測はLightweight。mode設定は固定')
@@ -82,7 +92,7 @@ class StudyConfig(RuntimeConfig):
         if self.stage=='independent_validation' and (self.partition!='validation' or self.start_offset<1000000 or self.start_offset+self.deals>2000000):raise ValueError('検証は未使用検証配札だけ')
         if self.series=='R' and (self.stage!='development_pilot' or self.repeats!=2):raise ValueError('Rは開発測定系列。互換repeats=2、実反復はmeasurement_repeatsを使用')
         if self.series=='D' and self.stage=='independent_validation' and 128 not in self.budgets:raise ValueError('D検証は主要128世界を必須とします')
-        if self.revision!='phase38' and self.series=='D' and (self.warmups!=0 or self.measure_stopping):raise ValueError('Dは時間測定をしない。warmups=0、measure_stopping=falseを指定')
+        if self.revision not in ('phase38','phase39') and self.series=='D' and (self.warmups!=0 or self.measure_stopping):raise ValueError('Dは時間測定をしない。warmups=0、measure_stopping=falseを指定')
         if {1900000,1900001,1910000,1910001,1920000,1920001}&set(range(self.start_offset,self.start_offset+self.deals)):raise ValueError('既観測検証配札を再利用しません')
         if study_estimate(self)['derived_games_upper']>self.max_derived_games:raise ValueError('研究派生対局の事前上限超過')
         return self
@@ -91,6 +101,30 @@ class StudyJobs(RuntimeJobs):
     kind='runtime_divergence_v1'
     config_type=StudyConfig
     estimate=staticmethod(study_estimate)
+
+    def __init__(self,*args,**kwargs):
+        super().__init__(*args,**kwargs);self.store=TimedStore(self.store)
+
+    def begin_run(self,v):
+        parent=super().begin_run(v)
+        if v['config'].get('revision')!='phase39':return parent,None
+        v['stage_measurements']=[]
+        return parent,active_ledger.set({'rows':v['stage_measurements'],'stack':[]}) if v['config']['measure_stages'] else None
+
+    def finish_run(self,v,token):
+        super().finish_run(v,token[0])
+        if token[1] is not None:active_ledger.reset(token[1])
+
+    def result_content(self,v):
+        parent=super().result_content(v)
+        return {**parent,'stage_measurements':v.get('stage_measurements',[])} if v['config'].get('revision')=='phase39' else parent
+
+    def collect_positions(self,c,check,progress,snapshot):
+        with stage_span('collection'):return super().collect_positions(c,check,progress,snapshot)
+
+    def calibrate(self,ids):
+        if not isinstance(ids,list) or not 1<=len(ids)<=30 or any(not isinstance(i,str) or not i.strip() for i in ids) or len(set(ids))!=len(ids):raise ValueError('校正IDは空でない文字列で重複のない1〜30件')
+        model=fit_calibration([self.get(i) for i in ids]);return {'model':model.model_dump(mode='json'),'model_hash':digest(model.model_dump(mode='json'))}
 
     def plan_extras(self,c):
         env=environment(c);env.update(warmup=c.warmups>0,warmup_repeats=c.warmups if c.series=='R' else 0,
@@ -116,7 +150,7 @@ class StudyJobs(RuntimeJobs):
             plan.update(measurement_plan_version='lightweight-comparison-v1',primary_comparisons=['Lightweight - Baseline'],
                 outcomes=['paired_wall_difference','paired_relative_wall_difference','runtime_distribution'],
                 secondary_comparisons=['Detailed Profile - Baseline','方式間の同一modeの時間差'])
-        if c.revision=='phase38':
+        if c.revision in ('phase38','phase39'):
             plan.update(version='multideal-validation-phase38-v1',revision='phase38',fixed=True,
               research_questions=['128世界での対応実時間/計算量節約','独立終局報酬差','分岐率と分岐時報酬の符号'],
               primary_comparisons=['Gap-Adaptive - Fixed','Uncertainty-Adaptive - Fixed'],primary_budget=128,
@@ -136,34 +170,51 @@ class StudyJobs(RuntimeJobs):
                 'warmup_repeats':c.warmups,'measurement_repeats':1,'prior_computation':'各局面で最大Fixed照合経路・独立参照・最終評価を先に計算。任意warmupは最初の局面のみ16世界。cold-start測定ではない。',
                 'stop_check_scope':'checkpoint計数のみ。停止関数単体時間はnull、profileは使用しない。'},
               uncertainty='小標本は記述のみ。主要2比較を事前固定し層別は探索的。中間アウトカムで規模変更なし。')
+        if c.revision=='phase39':
+            plan.update(version='budget-completion-phase39-v1',revision='phase39',calibration=c.calibration.model_dump(mode='json') if c.calibration else None,
+              completion_forecast=forecast(c,study_estimate(c)),measurement='粗粒度区間のwall/CPU、入れ子は排他集計、未計測は残差。ON/OFFは乱数に触れない。',
+              completion_condition='全配札/局面/3モデル/全方式/参照/最終/対応計測/Plan Hash/両上限/結果保存を満たすときのみ主要確定。')
         return {'study_plan':plan,'study_plan_hash':digest(plan)}
 
     def register(self,c):
-        if c.revision=='phase38':
+        if c.revision in ('phase38','phase39'):
             from .evidence_lab import deal_identity
             from .rollout_quality import runtime_info
             sources=runtime_info()['source_sha256']
             if any(deal_identity(s,sources) in set(c.prior_deal_hashes) for s in range(c.start_offset,c.start_offset+c.deals)):raise ValueError('既存配札一覧との実配札Hash重複')
+            if c.revision=='phase39' and c.calibration:
+                if any(deal_identity(s,sources) in set(c.calibration.source_deal_hashes) for s in range(c.start_offset,c.start_offset+c.deals)):raise ValueError('校正用配札を独立検証へ再利用しません')
+                e=environment(c)
+                if c.calibration.environment and any(c.calibration.environment.get(k)!=e[k] for k in ('os','cpu','python')):raise ValueError('校正環境と実行環境が異なります')
+                if forecast(c,study_estimate(c))['rating']=='予算超過のおそれ' and not c.allow_risky_forecast:raise ValueError('保守予測が時間上限超過。別Planで規模を減らすかallow_risky_forecastを明示')
         return super().register(c)
 
     def start(self,identifier,expected_hash):
         v=self.get(identifier)
-        if v['config'].get('revision')=='phase38':
+        if v['config'].get('revision') in ('phase38','phase39'):
             snap=v['snapshot']
             if digest(snap)!=v['condition_hash'] or digest(snap['study_plan'])!=snap['study_plan_hash'] or v['config']!=snap['config']:raise ValueError('固定PlanのHashが不一致')
         return super().start(identifier,expected_hash)
 
     def position_results(self,c,records,observations,check,progress):
         selected=select_validation_positions(records,c.max_positions)
-        if c.revision=='phase38' and len({r['deal_hash'] for r in selected})!=c.deals:raise ValueError('事前指定した独立配札数に到達していません。枠を補完しません')
+        if c.revision in ('phase38','phase39') and len({r['deal_hash'] for r in selected})!=c.deals:raise ValueError('事前指定した独立配札数に到達していません。枠を補完しません')
         for ordinal,r in enumerate(selected):
             obs=observations[r['position_hash']];fn=(analyze_lightweight if c.revision=='phase37' else analyze_noise) if c.series=='R' else analyze_divergence
-            result=analyze_multideal(obs,c,r['position_hash'],ordinal,check,progress) if c.revision=='phase38' else fn(obs,c,r['position_hash'],check,progress)
+            context=position_context.set({'position_id':r['position_hash'],'deal_id':r['deal_id'],'deal_hash':r['deal_hash'],'period':r['period'],'turn':r['turn']})
+            try:
+                with stage_span('position_management'):
+                    result=analyze_multideal(obs,c,r['position_hash'],ordinal,check,progress) if c.revision in ('phase38','phase39') else fn(obs,c,r['position_hash'],check,progress)
+            finally:position_context.reset(context)
+            if c.revision=='phase39':result['revision']='phase39'
             if c.revision=='phase37':result['revision']='phase37'
             yield {**r,'position_id':r['position_hash'],'observation':asdict(obs),'labels':[r['stratum']['class']],
               'search':{'reversals':[]},'validation':None,'adaptive':result}
 
-    summarize_positions=staticmethod(lambda positions:multideal_summary(positions) if positions and positions[0]['adaptive'].get('revision')=='phase38' else lightweight_summary(positions) if positions and positions[0]['adaptive'].get('revision')=='phase37' else study_summary(positions))
+    @staticmethod
+    def summarize_positions(positions):
+        with stage_span('aggregation'):
+            return multideal_summary(positions) if positions and positions[0]['adaptive'].get('revision') in ('phase38','phase39') else lightweight_summary(positions) if positions and positions[0]['adaptive'].get('revision')=='phase37' else study_summary(positions)
 
     def get(self,identifier):
         v=super().get(identifier);v['measurement_environment']=v['snapshot'].get('study_plan',{}).get('environment')
@@ -172,4 +223,13 @@ class StudyJobs(RuntimeJobs):
         v['series']=v['config']['series']
         v['evaluated_independent_deals']=len({p['deal_hash'] for p in v['positions']})
         v['evaluated_positions']=len(v['positions'])
+        v['completion_progress']=deal_progress(v)
+        if v['config'].get('revision')=='phase39':
+            v['cost_breakdown']=breakdown(v.get('stage_measurements',[]),v['elapsed_seconds'])
+            v['completion_audit']=completion_audit(v)
+            if not v['completion_audit']['primary_finalized']:v['cluster_summary']=None
+            prediction=v['snapshot']['study_plan']['completion_forecast'];pred=prediction.get('predicted_seconds');slow=prediction.get('conservative_seconds')
+            v['forecast_validation']={'predicted_seconds':pred,'actual_seconds':v['elapsed_seconds'],'absolute_error':abs(v['elapsed_seconds']-pred) if pred is not None else None,
+              'relative_error':(v['elapsed_seconds']-pred)/pred if pred else None,'conservative_exceeded':v['elapsed_seconds']>slow if slow is not None else None,
+              'predicted_completion':prediction['rating'],'actual_status':v['status'],'final':v['status'] not in ('Registered','Running')}
         return v

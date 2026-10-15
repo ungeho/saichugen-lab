@@ -9,6 +9,7 @@ from .stopping_analysis import checkpoint,trace_sink,classify_stop,rate_interval
 from .runner import derived_seed
 from .reliability_analysis import reward_pair
 from .evaluation_statistics import fixed_evidence
+from .budget_calibration import stage_span
 
 KEYS=('derived_games','simulated_turns','simulated_player_actions','elapsed_seconds')
 
@@ -57,17 +58,21 @@ def analyze_horizon(obs,c,pid,check=lambda:None,progress=lambda:None):
         for model in c.models:
             for repeat in range(c.repeats):
                 seed=derived_seed(stages['policy'],f'repeat:{repeat}')
-                path=select(obs,cards,model,seed,max(c.budgets),'Fixed',c,check,progress);path['repeat']=repeat;paths.append(path)
+                with stage_span('policy_reconstruction',model=model,method='Fixed'):
+                    path=select(obs,cards,model,seed,max(c.budgets),'Fixed',c,check,progress)
+                path['repeat']=repeat;paths.append(path)
                 for b in c.budgets:
                     for method in METHODS:rows.append(reconstruct(obs,path,b,method,c))
     finally:selection_observer.reset(token)
     reference={};final={};overhead=[];family=10000
     for model in c.models:
         if meter:meter['stage']='reference'
-        rs,rc=sample_table(obs,cards,model,stages['reference'],c.reference_worlds,check,progress)
+        with stage_span('reference',model=model):
+            rs,rc=sample_table(obs,cards,model,stages['reference'],c.reference_worlds,check,progress)
         ref=ranked(table(cards,rs))[0]['card'];reference[model]={'card':ref,'seed':stages['reference'],'cost':rc,'candidates':table(cards,rs)}
         if meter:meter['stage']='final'
-        fs,fc=sample_table(obs,cards,model,stages['final'],c.final_worlds,check,progress)
+        with stage_span('final',model=model):
+            fs,fc=sample_table(obs,cards,model,stages['final'],c.final_worlds,check,progress)
         final[model]={'seed':stages['final'],'cost':fc,'candidates':table(cards,fs)};overhead.extend([rc,fc])
         for r in rows:
             if r['model']!=model:continue

@@ -11,6 +11,7 @@ from .noise_analysis import analyze_divergence, stats
 from .lightweight_analysis import coverage_summary
 from .runtime_analysis import runtime_sink, assert_same, seed_strings
 from .runner import derived_seed
+from .budget_calibration import stage_span
 
 
 def method_order(c, model, ordinal):
@@ -48,7 +49,9 @@ def analyze_multideal(obs,c,pid,ordinal,check=lambda:None,progress=lambda:None):
                         if event=='checkpoint':count[0]+=1
                     cpu=process_time();wall=perf_counter()
                     inner=selection_observer.set(observer)
-                    try:d=select(obs,obs.legal_actions,model,int(path['seed']),budget,method,c,check,lambda:None)
+                    try:
+                        with stage_span('policy_direct',model=model,method=method,phase=phase):
+                            d=select(obs,obs.legal_actions,model,int(path['seed']),budget,method,c,check,lambda:None)
                     finally:selection_observer.reset(inner)
                     wall=perf_counter()-wall;cpu=process_time()-cpu
                     assert_same(d,expected)

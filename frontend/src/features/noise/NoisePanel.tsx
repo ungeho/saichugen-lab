@@ -1,4 +1,5 @@
 import {useState} from 'react';
+import {api} from '../../model';
 import {AdaptivePanel,adaptiveInitial,type AdaptiveJob} from '../adaptive/AdaptivePanel';
 import {Chart} from '../../Chart';
 import {Button} from '../../components/ui/button';
@@ -6,7 +7,23 @@ export const noiseInitial={...adaptiveInitial,revision:'phase37',measurement_mod
 export const divergenceInitial={...noiseInitial,name:'Series D・判断分岐カバレッジ',series:'D',start_offset:1940000,stage:'independent_validation',partition:'validation',deals:4,max_positions:4,turns:[3,10,11,13],models:['Random','Heuristic','ScoreAware'],repeats:1,budgets:[128],warmups:0,measure_stopping:false};
 export const multidealInitial={...divergenceInitial,revision:'phase38',name:'Phase38・事前登録型複数配札検証',start_offset:1950000,deals:6,max_positions:6,turns:[4,10,11,14],warmups:0,max_derived_games:80000,timeout_seconds:250,order_seed:38001,prior_deal_hashes:[],prior_inventory_note:''};
 
+export const calibrationInitial={...multidealInitial,revision:'phase39',name:'Phase39・費用校正パイロット',stage:'development_pilot',partition:'development',start_offset:39000,deals:2,max_positions:2,turns:[10,14],max_derived_games:40000,timeout_seconds:120,calibration:null,measure_stages:true,allow_risky_forecast:false};
+
 type PairedSummary={stratum:string;model:string;method:string;independent_deals:number;wall_difference:{mean:number|null};reward_difference:number;derived_games_difference?:number;early_stop_rate?:number;divergence_rate?:number;divergent_reward_signs?:unknown;paired_deals?:unknown};
+function CalibrationBuilder(){
+ const [ids,setIds]=useState(''),[result,setResult]=useState<unknown>(null),[error,setError]=useState(''),[busy,setBusy]=useState(false);
+ return <details><summary>Budget Calibration：保存実験から校正モデルを作る</summary><p>同じ環境のPhase 38記録・Phase 39開発記録だけを使用します。独立検証を校正へ戻しません。出力のmodelをPlan JSONのcalibrationへコピーして見積もってください。</p><label>校正元の実験ID（カンマ区切り）<input aria-label="校正元の実験ID" value={ids} onChange={e=>setIds(e.target.value)}/></label><Button disabled={busy||!ids.trim()} onClick={async()=>{setBusy(true);setError('');try{setResult(await api('/api/runtime-divergence/calibration',{source_ids:ids.split(',').map(x=>x.trim())}));}catch(e){setError(String(e));}finally{setBusy(false);}}}>校正モデルを生成</Button>{error&&<p role="alert">{error}</p>}{result!==null&&<pre>{JSON.stringify(result,null,2)}</pre>}</details>;
+}
+function CostReliabilityResults({job}:{job:AdaptiveJob}){
+ const v=job as AdaptiveJob&{completion_progress?:{counts:{complete:number;partial:number;not_started:number};positions:unknown;bias_warning:string};cost_breakdown?:unknown;stage_measurements?:unknown;forecast_validation?:unknown;completion_audit?:unknown};
+ const snap=job.snapshot as {study_plan?:{completion_forecast?:{rating:string;predicted_seconds:number|null;conservative_seconds:number|null;reliability?:string};calibration?:unknown}};
+ const p=v.completion_progress,f=snap.study_plan?.completion_forecast;
+ return <section className="panel" aria-label="予算校正と完了信頼性"><h3>Completion Reliability：完了・部分・未開始</h3>{p?<><p>完全評価 {p.counts.complete} / 部分評価 {p.counts.partial} / 未開始 {p.counts.not_started}</p><p>{p.bias_warning}</p><details><summary>配札ごとの評価状態・実行順序</summary><pre>{JSON.stringify(p.positions,null,2)}</pre></details></>:<p>配札別進捗は未記録です。</p>}
+ {f&&<><h3>Completion Forecast：実行前に固定した予測</h3><p>{f.rating} / 予想 {f.predicted_seconds?.toFixed(3)??'未推定'}秒 / 保守予想 {f.conservative_seconds?.toFixed(3)??'未推定'}秒</p><p>{f.reliability} 完了保証ではありません。</p></>}
+ <details><summary>Cost Breakdown：排他的な処理時間と未計測残差</summary><pre>{JSON.stringify(v.cost_breakdown?{breakdown:v.cost_breakdown,intervals:v.stage_measurements}:{status:'旧実験には段階別計測なし。推測で補完しません。'},null,2)}</pre></details>
+ <details><summary>校正モデル・予測と実測・完了条件</summary><pre>{JSON.stringify({model:snap.study_plan?.calibration,validation:v.forecast_validation,audit:v.completion_audit},null,2)}</pre></details>
+ </section>;
+}
 function MultiDealResults({job}:{job:AdaptiveJob}){
  const v=job as AdaptiveJob&{planned_positions?:unknown[];estimate?:unknown;series?:string;job_termination_reason?:string;execution_cost?:{policy:{completed_games:number};reference:{completed_games:number};final:{completed_games:number}}};
  const snap=job.snapshot as {study_plan_hash?:string;study_plan?:{fixed?:boolean;independent_deals?:number}};
@@ -34,7 +51,7 @@ function Results({job}:{job:AdaptiveJob}){
  const v=job as unknown as StudyJob;const [index,setIndex]=useState(0),[model,setModel]=useState('Random');const p=v.positions[Math.min(index,Math.max(0,v.positions.length-1))];const summary=v.cluster_summary??[];
  const noise=summary.filter(r=>r.series==='R'&&r.model===model&&r.position_hash===p?.position_hash),ds=mainD(summary).filter(r=>r.model===model);
  const samples=v.runtime_measurements?.filter(r=>r.phase==='measurement'&&r.model===model&&r.position_hash===p?.position_hash&&r.measurement_completed)??[];
- return <section className="panel" aria-label="時間ノイズと判断分岐の結果">{(job.config as {revision?:string}).revision==='phase38'&&<MultiDealResults job={job}/>}<h3>Series {v.series}：{v.series==='R'?'同じ判断の時間変動':'全事前局面の判断分岐'}</h3><p>独立配札 {v.evaluated_independent_deals} / 評価局面 {v.evaluated_positions}。Rの時間反復は配札数を増やしません。Dの主分析は分岐例だけに絞りません。</p><p>初期16・追加16、Gap &gt; 0.5、全競合の差 &gt; 2×SE+0.05は固定。時間ノイズと独立報酬は別系列です。</p>
+ return <section className="panel" aria-label="時間ノイズと判断分岐の結果">{['phase38','phase39'].includes((job.config as {revision:string}).revision)&&<MultiDealResults job={job}/>}<CostReliabilityResults job={job}/><h3>Series {v.series}：{v.series==='R'?'同じ判断の時間変動':'全事前局面の判断分岐'}</h3><p>独立配札 {v.evaluated_independent_deals} / 評価局面 {v.evaluated_positions}。Rの時間反復は配札数を増やしません。Dの主分析は分岐例だけに絞りません。</p><p>初期16・追加16、Gap &gt; 0.5、全競合の差 &gt; 2×SE+0.05は固定。時間ノイズと独立報酬は別系列です。</p>
  <label>系列の継続モデル<select aria-label="系列の継続モデル" value={model} onChange={e=>setModel(e.target.value)}>{['Random','Heuristic','ScoreAware'].map(m=><option key={m}>{m}</option>)}</select></label>
  <label>系列の局面<select aria-label="系列の局面" value={index} onChange={e=>setIndex(Number(e.target.value))}>{v.positions.map((p,i)=><option key={p.position_hash} value={i}>第{p.turn+1}手 / {p.stratum.class} / {p.position_hash.slice(0,8)}</option>)}</select></label>
  {v.series==='R'?<><h3>Runtime Noise：通常群と計測群を分ける</h3><p>同一局面・同一seed・同一探索量を反復します。warmupは時間分布から除外し研究コストに含めます。Lightweightはcheckpointを数えるだけで高頻度タイマーを使いません。Baselineとの差は環境ノイズも含みます。Detailed Profileは別集約します。</p>
@@ -48,4 +65,4 @@ function Results({job}:{job:AdaptiveJob}){
  <details><summary>Plan・Plan Hash・環境・順序・warmup・欠測</summary><pre>{JSON.stringify({snapshot:v.snapshot,environment:v.measurement_environment,measurements:v.runtime_measurements,missing:v.missing_positions},null,2)}</pre></details><details><summary>層別結果・未評価層</summary><pre>{JSON.stringify({summary:v.cluster_summary,coverage:v.runtime_coverage},null,2)}</pre></details>
  </section>;
 }
-export function NoisePanel(){const [preset,setPreset]=useState<'R'|'D'|'V'>('R'),[epoch,setEpoch]=useState(0);const fresh=(s:'R'|'D'|'V')=>{window.history.pushState(null,'',location.pathname);setPreset(s);setEpoch(x=>x+1);dispatchEvent(new PopStateEvent('popstate'));};return <><div className="panel"><h3>新規実験の系列</h3><Button variant="outline" onClick={()=>fresh('R')}>Series Rの新規条件</Button><Button variant="outline" onClick={()=>fresh('D')}>Series Dの新規条件</Button><Button variant="outline" onClick={()=>fresh('V')}>事前登録型複数配札検証の新規条件</Button><p>既存結果を上書きせず別Planで登録します。Phase 38の独立検証には、照合済みの既存配札Hash一覧と調査範囲をJSONに指定してください。空の一覧では検証を登録できません。</p></div><AdaptivePanel key={preset+epoch} lab="runtime-divergence" title="Runtime Noise & Decision Divergence Lab" phase={38} initial={preset==='R'?noiseInitial:preset==='D'?divergenceInitial:multidealInitial} hideStandardResults renderExtra={job=><Results job={job}/>}/></>;}
+export function NoisePanel(){const [preset,setPreset]=useState<'R'|'D'|'V'|'C'>('R'),[epoch,setEpoch]=useState(0);const fresh=(s:'R'|'D'|'V'|'C')=>{window.history.pushState(null,'',location.pathname);setPreset(s);setEpoch(x=>x+1);dispatchEvent(new PopStateEvent('popstate'));};return <><div className="panel"><h3>新規実験の系列</h3><Button variant="outline" onClick={()=>fresh('R')}>Series Rの新規条件</Button><Button variant="outline" onClick={()=>fresh('D')}>Series Dの新規条件</Button><Button variant="outline" onClick={()=>fresh('V')}>事前登録型複数配札検証の新規条件</Button><Button variant="outline" onClick={()=>fresh('C')}>計算予算校正の新規条件</Button><CalibrationBuilder/><p>既存結果を上書きせず別Planで登録します。Phase 38の独立検証には、照合済みの既存配札Hash一覧と調査範囲をJSONに指定してください。空の一覧では検証を登録できません。</p></div><AdaptivePanel key={preset+epoch} lab="runtime-divergence" title="Runtime Noise & Decision Divergence Lab" phase={39} initial={preset==='R'?noiseInitial:preset==='D'?divergenceInitial:preset==='V'?multidealInitial:calibrationInitial} hideStandardResults renderExtra={job=><Results job={job}/>}/></>;}
