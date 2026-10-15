@@ -356,3 +356,7 @@ Zigzag（強→弱）とReverse Zigzag（弱→強）を通常対局・観戦・
 ## Phase 40：計算コスト予測の適用範囲
 
 既存Runtime Noise & Decision Divergence Labの「校正範囲検証の新規条件」と「Calibration Coverage」から、記録の品質分類、合成DBの保存負荷測定、範囲付きv2予測モデルを利用できます。独立検証前に係数・Hash・保存条件を固定し、配札単位の探索時間とPlan全体時間を区別します。詳細は[Phase 40](docs/phase40.md)を参照してください。
+
+## Phase 41：適応探索の独立配札評価Campaign
+
+既存Runtime Noise & Decision Divergence LabにCampaign結果を追加しました。Fixedに対する対応wall時間差と独立終局報酬差を配札等重みで表示し、分岐配札・分岐局面・分岐判断を区別します。Phase40の凍結予測モデルを指定し、時点割当と採用基準を実験前に固定してください。使い方・実測・制限は[Phase 41](docs/phase41.md)を参照してください。

@@ -1,0 +1,422 @@
+{
+  "version": "coverage-turn-rate-v2",
+  "source_ids": [
+    "6f074d03-b7ec-4839-8add-8a7fa64eb448",
+    "2eb4d45f-2535-4ef9-8c7c-f45a3b4c5005"
+  ],
+  "source_deal_hashes": [
+    "19087e9008f7f5613cf90a033a2d9babbf570376bffcfe2436ffd79a5f5f598a",
+    "524e9dfc02c197f34f43f039f2094e853bf7acd7118a29da88812f49936ee7d3",
+    "a0bde1b9ebab8ae5846773c063e0f28cc97f97ea61b82e10505e47b188f15348",
+    "b3728c56675e8b02d9476b720830e38892caeaa9fdbef37dc1e57e5c6d839b31",
+    "c55c1cf1273e6a9d720d03795dd6601660b75b843aab7ae093516e7372a05c54"
+  ],
+  "environment": {
+    "os": "Windows-11-10.0.26200-SP0",
+    "cpu": "Intel64 Family 6 Model 198 Stepping 2, GenuineIntel",
+    "python": "3.12.14 (main, Aug 25 2026, 14:01:42) [MSC v.1944 64 bit (AMD64)]"
+  },
+  "rates": {
+    "policy:Random": 0.0000527915039062807,
+    "policy:Heuristic": 0.0006420643733097975,
+    "policy:ScoreAware": 0.0006010972468449496,
+    "reference:Random": 0.000054174038461145374,
+    "final:Random": 0.00005232890625002266,
+    "reference:Heuristic": 0.0006269445312499127,
+    "final:Heuristic": 0.0006441237980765799,
+    "reference:ScoreAware": 0.0005903323617793341,
+    "final:ScoreAware": 0.000588493990385075
+  },
+  "slow_rates": {
+    "policy:Random": 0.0004019114583329042,
+    "policy:Heuristic": 0.0009195893229166548,
+    "policy:ScoreAware": 0.0006811802283653957,
+    "reference:Random": 0.0004553208333343643,
+    "final:Random": 0.00041296458332832725,
+    "reference:Heuristic": 0.0006927571678320927,
+    "final:Heuristic": 0.0007138556381113682,
+    "reference:ScoreAware": 0.0006507541666754454,
+    "final:ScoreAware": 0.0006492416666598425
+  },
+  "safety_factor": 1.5,
+  "management_seconds": 0.149890391666266,
+  "conservative_management_seconds": 1.0,
+  "note": "同環境の粗粒度・排他的な開発区間だけ。モデル×時点×処理段階の秒/手番。保存は合成DB単価×実行前書込回数上限。未知セルは全時点のモデル単価へ外挿し警告。安全係数1.5は信頼水準ではない。",
+  "cells": {
+    "policy:Random:middle": {
+      "n": 4,
+      "deals": 1,
+      "rate": 0.00006480430245538063,
+      "slow": 0.0000660292187500744,
+      "min_legal": 7,
+      "max_legal": 7,
+      "min_worlds": 128,
+      "max_worlds": 128
+    },
+    "policy:Heuristic:middle": {
+      "n": 4,
+      "deals": 1,
+      "rate": 0.0004913614341517507,
+      "slow": 0.0004972804910713994,
+      "min_legal": 7,
+      "max_legal": 7,
+      "min_worlds": 128,
+      "max_worlds": 128
+    },
+    "policy:ScoreAware:middle": {
+      "n": 4,
+      "deals": 1,
+      "rate": 0.00046889074218748407,
+      "slow": 0.0004825748883928631,
+      "min_legal": 7,
+      "max_legal": 7,
+      "min_worlds": 128,
+      "max_worlds": 128
+    },
+    "reference:Random:middle": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.00006699035714307554,
+      "slow": 0.00006699035714307554,
+      "min_legal": 7,
+      "max_legal": 7,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "final:Random:middle": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.00006888357142835438,
+      "slow": 0.00006888357142835438,
+      "min_legal": 7,
+      "max_legal": 7,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "reference:Heuristic:middle": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.0004859501785716702,
+      "slow": 0.0004859501785716702,
+      "min_legal": 7,
+      "max_legal": 7,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "final:Heuristic:middle": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.0004842560714284413,
+      "slow": 0.0004842560714284413,
+      "min_legal": 7,
+      "max_legal": 7,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "reference:ScoreAware:middle": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.0005018578571427465,
+      "slow": 0.0005018578571427465,
+      "min_legal": 7,
+      "max_legal": 7,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "final:ScoreAware:middle": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.0004891841071424453,
+      "slow": 0.0004891841071424453,
+      "min_legal": 7,
+      "max_legal": 7,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "policy:Random:final_round": {
+      "n": 8,
+      "deals": 2,
+      "rate": 0.0003479765625002962,
+      "slow": 0.0004019114583329042,
+      "min_legal": 3,
+      "max_legal": 3,
+      "min_worlds": 128,
+      "max_worlds": 128
+    },
+    "policy:Heuristic:final_round": {
+      "n": 8,
+      "deals": 2,
+      "rate": 0.0006054036458331691,
+      "slow": 0.0009195893229166548,
+      "min_legal": 3,
+      "max_legal": 3,
+      "min_worlds": 128,
+      "max_worlds": 128
+    },
+    "policy:ScoreAware:final_round": {
+      "n": 8,
+      "deals": 2,
+      "rate": 0.0005285458333334306,
+      "slow": 0.0005643570312514612,
+      "min_legal": 3,
+      "max_legal": 3,
+      "min_worlds": 128,
+      "max_worlds": 128
+    },
+    "reference:Random:final_round": {
+      "n": 2,
+      "deals": 2,
+      "rate": 0.00044097083333127784,
+      "slow": 0.0004553208333343643,
+      "min_legal": 3,
+      "max_legal": 3,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "final:Random:final_round": {
+      "n": 2,
+      "deals": 2,
+      "rate": 0.00040200937499671835,
+      "slow": 0.00041296458332832725,
+      "min_legal": 3,
+      "max_legal": 3,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "reference:Heuristic:final_round": {
+      "n": 2,
+      "deals": 2,
+      "rate": 0.0005692999999998468,
+      "slow": 0.0005791000000006837,
+      "min_legal": 3,
+      "max_legal": 3,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "final:Heuristic:final_round": {
+      "n": 2,
+      "deals": 2,
+      "rate": 0.0005534604166660037,
+      "slow": 0.0005741729166667634,
+      "min_legal": 3,
+      "max_legal": 3,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "reference:ScoreAware:final_round": {
+      "n": 2,
+      "deals": 2,
+      "rate": 0.0005919104166712449,
+      "slow": 0.0006507541666754454,
+      "min_legal": 3,
+      "max_legal": 3,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "final:ScoreAware:final_round": {
+      "n": 2,
+      "deals": 2,
+      "rate": 0.0005795593749956159,
+      "slow": 0.0006492416666598425,
+      "min_legal": 3,
+      "max_legal": 3,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "policy:Random:early": {
+      "n": 4,
+      "deals": 1,
+      "rate": 0.00003171044170674836,
+      "slow": 0.000035331643356610164,
+      "min_legal": 13,
+      "max_legal": 13,
+      "min_worlds": 128,
+      "max_worlds": 128
+    },
+    "policy:Heuristic:early": {
+      "n": 4,
+      "deals": 1,
+      "rate": 0.0007077976999563018,
+      "slow": 0.0007175822989510677,
+      "min_legal": 13,
+      "max_legal": 13,
+      "min_worlds": 128,
+      "max_worlds": 128
+    },
+    "policy:ScoreAware:early": {
+      "n": 4,
+      "deals": 1,
+      "rate": 0.000660538488854906,
+      "slow": 0.0006811802283653957,
+      "min_legal": 13,
+      "max_legal": 13,
+      "min_worlds": 128,
+      "max_worlds": 128
+    },
+    "reference:Random:early": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.00003047067307672567,
+      "slow": 0.00003047067307672567,
+      "min_legal": 13,
+      "max_legal": 13,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "final:Random:early": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.000029316302447864634,
+      "slow": 0.000029316302447864634,
+      "min_legal": 13,
+      "max_legal": 13,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "reference:Heuristic:early": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.0006927571678320927,
+      "slow": 0.0006927571678320927,
+      "min_legal": 13,
+      "max_legal": 13,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "final:Heuristic:early": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.0007138556381113682,
+      "slow": 0.0007138556381113682,
+      "min_legal": 13,
+      "max_legal": 13,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "reference:ScoreAware:early": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.0006392751311195625,
+      "slow": 0.0006392751311195625,
+      "min_legal": 13,
+      "max_legal": 13,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "final:ScoreAware:early": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.0006393861451053956,
+      "slow": 0.0006393861451053956,
+      "min_legal": 13,
+      "max_legal": 13,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "policy:Random:before_final_round": {
+      "n": 4,
+      "deals": 1,
+      "rate": 0.00008708457031255297,
+      "slow": 0.00009242968749993234,
+      "min_legal": 6,
+      "max_legal": 6,
+      "min_worlds": 128,
+      "max_worlds": 128
+    },
+    "policy:Heuristic:before_final_round": {
+      "n": 4,
+      "deals": 1,
+      "rate": 0.00047934360351568434,
+      "slow": 0.0004985389973957884,
+      "min_legal": 6,
+      "max_legal": 6,
+      "min_worlds": 128,
+      "max_worlds": 128
+    },
+    "policy:ScoreAware:before_final_round": {
+      "n": 4,
+      "deals": 1,
+      "rate": 0.00045786551920564317,
+      "slow": 0.00047455429687500345,
+      "min_legal": 6,
+      "max_legal": 6,
+      "min_worlds": 128,
+      "max_worlds": 128
+    },
+    "reference:Random:before_final_round": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.00008001692708129819,
+      "slow": 0.00008001692708129819,
+      "min_legal": 6,
+      "max_legal": 6,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "final:Random:before_final_round": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.00007788333333280661,
+      "slow": 0.00007788333333280661,
+      "min_legal": 6,
+      "max_legal": 6,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "reference:Heuristic:before_final_round": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.0004548388020827095,
+      "slow": 0.0004548388020827095,
+      "min_legal": 6,
+      "max_legal": 6,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "final:Heuristic:before_final_round": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.0004844445312504793,
+      "slow": 0.0004844445312504793,
+      "min_legal": 6,
+      "max_legal": 6,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "reference:ScoreAware:before_final_round": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.000427345833332519,
+      "slow": 0.000427345833332519,
+      "min_legal": 6,
+      "max_legal": 6,
+      "min_worlds": 16,
+      "max_worlds": 16
+    },
+    "final:ScoreAware:before_final_round": {
+      "n": 1,
+      "deals": 1,
+      "rate": 0.00043232213541936443,
+      "slow": 0.00043232213541936443,
+      "min_legal": 6,
+      "max_legal": 6,
+      "min_worlds": 16,
+      "max_worlds": 16
+    }
+  },
+  "storage": {
+    "benchmark_id": "fb3fa1dc-698f-4275-8747-c00310507ebe",
+    "mean_per_write": 0.0038680147059030967,
+    "max_per_write": 0.011301100000309816,
+    "history_min": 0,
+    "history_max": 250,
+    "payload_min": 16415,
+    "payload_max": 2097183
+  },
+  "quality_counts": {
+    "使用可能": 90,
+    "条件付き使用可能": 250,
+    "使用不可": 0,
+    "情報不足": 0
+  }
+}
