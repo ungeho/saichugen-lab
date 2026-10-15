@@ -344,3 +344,7 @@ Zigzag（強→弱）とReverse Zigzag（弱→強）を通常対局・観戦・
 ## Phase 37：低負荷計測と判断分岐カバレッジ
 
 既存のRuntime Noise & Decision Divergence Labに、Baseline／Lightweight／Detailed Profileのバランスした対応比較を追加しました。新版は `revision: "phase37"` を指定し、旧実験も引き続き参照できます。Dは1配札1局面を優先し、配札別の分岐発生・見逃し仮定例を表示します。設計と実測は[Phase 37](docs/phase37.md)。
+
+## Phase 38：事前登録型・複数独立配札検証
+
+同じLabの「事前登録型複数配札検証の新規条件」で、128世界の対応実時間差と独立終局報酬差を比較できます。`revision: "phase38"` を指定し、既存配札Hash一覧と照合範囲を記入してから見積もり・登録・明示開始します。Planは登録時に固定され、変更は別Planとして扱います。6配札の結果でも優劣や同等性を断定しません。設計・予算・実測・制限は[Phase 38](docs/phase38.md)を参照してください。
